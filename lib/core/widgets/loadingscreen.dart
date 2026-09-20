@@ -87,50 +87,34 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _runInitialization() async {
-    // Step 1: Init cache / seed
-    _setStatus('Loading built-in Pokémon data…', 0.1);
+    // Step 1: Init cache — fast, just reads SharedPreferences
+    _setStatus('Loading built-in Pokémon data…', 0.2);
     await CacheService.init();
-    await Future.delayed(const Duration(milliseconds: 400));
 
-    // Step 2: Load pokemon (cache or network)
-    _setStatus('Checking local cache…', 0.25);
-    await Future.delayed(const Duration(milliseconds: 300));
-
+    // Step 2: loadPokemon returns INSTANTLY with built-ins or cache.
+    // Any network refresh happens silently in the background.
+    _setStatus('Preparing Pokédex…', 0.6);
     final pokemon = await PokemonService.loadPokemon(
-      onStatus: (msg) {
-        // Parse progress from "Downloading (X/Y)"
-        final match = RegExp(r'(\d+)/(\d+)').firstMatch(msg);
-        if (match != null) {
-          final done = int.tryParse(match.group(1) ?? '0') ?? 0;
-          final total = int.tryParse(match.group(2) ?? '1') ?? 1;
-          _setStatus(msg, 0.3 + 0.65 * (done / total));
-        } else {
-          _setStatus(msg, _progress);
-        }
-      },
+      onStatus: (msg) => _setStatus(msg, _progress),
     );
 
     _setStatus('Pokédex ready! (${pokemon.length} Pokémon)', 1.0);
     _loadedPokemon = pokemon;
 
-    // Brief pause so user sees 100%
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     if (mounted) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            transitionDuration: const Duration(milliseconds: 500),
-            pageBuilder: (_, _, _) =>
-                HomeScreen(preloadedPokemon: _loadedPokemon),
-            transitionsBuilder: (_, anim, _, child) => FadeTransition(
-              opacity: anim,
-              child: child,
-            ),
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 500),
+          pageBuilder: (_, a1, a2) =>
+              HomeScreen(preloadedPokemon: _loadedPokemon),
+          transitionsBuilder: (_, anim, a2, child) => FadeTransition(
+            opacity: anim,
+            child: child,
           ),
-        );
-      }
+        ),
+      );
     }
   }
 
