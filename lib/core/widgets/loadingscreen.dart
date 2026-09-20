@@ -86,36 +86,57 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
+  bool _navigated = false;
+
+  /// Hard escape: navigate to HomeScreen no matter what.
+  void _navigateToHome(List<PokemonEntry> pokemon) {
+    if (_navigated || !mounted) return;
+    _navigated = true;
+    _tipTimer?.cancel();
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 500),
+        pageBuilder: (_, a1, a2) => HomeScreen(preloadedPokemon: pokemon),
+        transitionsBuilder: (_, anim, a2, child) =>
+            FadeTransition(opacity: anim, child: child),
+      ),
+    );
+  }
+
   Future<void> _runInitialization() async {
-    // Step 1: Init cache — fast, just reads SharedPreferences
+    // Hard 15-second escape hatch — if ANYTHING hangs, go to HomeScreen.
+    Timer(const Duration(seconds: 15), () {
+      if (!_navigated && mounted) {
+        _setStatus('Taking too long — loading what we have…', 1.0);
+        _navigateToHome(
+          _loadedPokemon.isNotEmpty ? _loadedPokemon : kBuiltInPokemon,
+        );
+      }
+    });
+
+    // Step 1: Init cache with its own 3s timeout
     _setStatus('Loading built-in Pokémon data…', 0.2);
-    await CacheService.init();
+    try {
+      await CacheService.init().timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // SharedPrefs timed out — continue with built-ins
+    }
 
     // Step 2: loadPokemon returns INSTANTLY with built-ins or cache.
-    // Any network refresh happens silently in the background.
+    // Network refresh fires silently in the background.
     _setStatus('Preparing Pokédex…', 0.6);
-    final pokemon = await PokemonService.loadPokemon(
-      onStatus: (msg) => _setStatus(msg, _progress),
-    );
-
-    _setStatus('Pokédex ready! (${pokemon.length} Pokémon)', 1.0);
-    _loadedPokemon = pokemon;
-
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 500),
-          pageBuilder: (_, a1, a2) =>
-              HomeScreen(preloadedPokemon: _loadedPokemon),
-          transitionsBuilder: (_, anim, a2, child) => FadeTransition(
-            opacity: anim,
-            child: child,
-          ),
-        ),
-      );
+    try {
+      final pokemon = await PokemonService.loadPokemon(
+        onStatus: (msg) => _setStatus(msg, _progress),
+      ).timeout(const Duration(seconds: 5));
+      _loadedPokemon = pokemon;
+    } catch (_) {
+      _loadedPokemon = kBuiltInPokemon;
     }
+
+    _setStatus('Pokédex ready! (${_loadedPokemon.length} Pokémon)', 1.0);
+    await Future.delayed(const Duration(milliseconds: 500));
+    _navigateToHome(_loadedPokemon);
   }
 
   void _setStatus(String msg, double progress) {
