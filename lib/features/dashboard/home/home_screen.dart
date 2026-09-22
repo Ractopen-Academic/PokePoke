@@ -2,6 +2,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:neopop/neopop.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 
@@ -320,47 +321,62 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildLoadMoreTile() {
     if (!_hasMore) {
       return Center(
-        child: Text('All caught!',
-            style: GoogleFonts.inter(color: Colors.white24, fontSize: 12)),
+        child: Text('— All caught! —',
+            style: GoogleFonts.pressStart2p(
+                color: Colors.white24, fontSize: 7)),
       );
     }
-    return GestureDetector(
-      onTap: _loadingMore ? null : _loadMore,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-              color: const Color(0xFFFF1C1C).withValues(alpha: 0.4)),
-        ),
-        child: _loadingMore
-            ? const Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: Color(0xFFFF1C1C),
-                  ),
-                ),
-              )
-            : Column(
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFF1C1C).withValues(alpha: 0.3)),
+      ),
+      child: _loadingMore
+          ? const Center(
+              child: SizedBox(
+                width: 26,
+                height: 26,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.5, color: Color(0xFFFF1C1C)),
+              ),
+            )
+          : Center(
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.add_circle_outline,
-                      color: Color(0xFFFF1C1C), size: 28),
-                  const SizedBox(height: 6),
-                  Text('Load 10 more',
-                      style: GoogleFonts.inter(
-                          color: const Color(0xFFFF1C1C),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700)),
-                  Text('#${_allPokemon.length + 1}–#${_allPokemon.length + 10}',
-                      style: GoogleFonts.inter(
-                          color: Colors.white38, fontSize: 10)),
+                  Text(
+                    '#${_allPokemon.length + 1}–#${_allPokemon.length + 10}',
+                    style: GoogleFonts.inter(
+                        color: Colors.white38, fontSize: 10),
+                  ),
+                  const SizedBox(height: 8),
+                  // NeoPoP tilted button for the 3D press feel
+                  NeoPopTiltedButton(
+                    isFloating: true,
+                    onTapUp: _loadMore,
+                    decoration: const NeoPopTiltedButtonDecoration(
+                      color: Color(0xFFFF1C1C),
+                      plunkColor: Color(0xFF8B0000),
+                      shadowColor: Color(0x44FF1C1C),
+                      showShimmer: true,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 8),
+                      child: Text(
+                        'Load 10 more',
+                        style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-      ),
+            ),
     );
   }
 
