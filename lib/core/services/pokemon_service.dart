@@ -7,16 +7,37 @@ class PokemonEntry {
   final int id;
   final String name;
   final List<String> types;
+  final int height; // decimetres (10 dm = 1.0 m)
+  final int weight; // hectograms (10 hg = 1.0 kg)
 
   PokemonEntry({
     required this.id,
     required this.name,
     required this.types,
+    this.height = 10,
+    this.weight = 100,
   });
 
   String get formattedId => '#${id.toString().padLeft(3, '0')}';
   String get displayName =>
       name[0].toUpperCase() + name.substring(1).replaceAll('-', ' ');
+
+  String get formattedHeight => '${(height / 10).toStringAsFixed(1)} m';
+  String get formattedWeight => '${(weight / 10).toStringAsFixed(1)} kg';
+
+  /// Responsive sprite sizing bounded between min 58px and max 92px.
+  /// Small Pokémon (e.g. Caterpie, Bulbasaur) scale around 58-66px,
+  /// mid-stages around 72-78px, and giants (e.g. Venusaur, Charizard) up to 92px.
+  double get spriteSize {
+    const minH = 3.0; // 0.3 m
+    const maxH = 20.0; // 2.0 m
+    const minSize = 58.0;
+    const maxSize = 92.0;
+
+    final clampedH = height.clamp(minH.toInt(), maxH.toInt()).toDouble();
+    final factor = (clampedH - minH) / (maxH - minH);
+    return minSize + factor * (maxSize - minSize);
+  }
 
   // Use the smaller sprite — loads fast, CORS-friendly on web
   String get spriteUrl =>
@@ -27,6 +48,8 @@ class PokemonEntry {
       id: m['id'] as int,
       name: m['name'] as String,
       types: List<String>.from(m['types'] as List),
+      height: (m['height'] as num?)?.toInt() ?? 10,
+      weight: (m['weight'] as num?)?.toInt() ?? 100,
     );
   }
 
@@ -34,6 +57,8 @@ class PokemonEntry {
         'id': id,
         'name': name,
         'types': types,
+        'height': height,
+        'weight': weight,
       };
 }
 
@@ -41,15 +66,15 @@ class PokemonEntry {
 // Hardcoded Pokémon #1–9 (verified via PokeAPI curl, always available offline)
 // ---------------------------------------------------------------------------
 final List<PokemonEntry> kBuiltInPokemon = [
-  PokemonEntry(id: 1, name: 'bulbasaur',  types: ['grass', 'poison']),
-  PokemonEntry(id: 2, name: 'ivysaur',    types: ['grass', 'poison']),
-  PokemonEntry(id: 3, name: 'venusaur',   types: ['grass', 'poison']),
-  PokemonEntry(id: 4, name: 'charmander', types: ['fire']),
-  PokemonEntry(id: 5, name: 'charmeleon', types: ['fire']),
-  PokemonEntry(id: 6, name: 'charizard',  types: ['fire', 'flying']),
-  PokemonEntry(id: 7, name: 'squirtle',   types: ['water']),
-  PokemonEntry(id: 8, name: 'wartortle',  types: ['water']),
-  PokemonEntry(id: 9, name: 'blastoise',  types: ['water']),
+  PokemonEntry(id: 1, name: 'bulbasaur',  types: ['grass', 'poison'], height: 7,  weight: 69),
+  PokemonEntry(id: 2, name: 'ivysaur',    types: ['grass', 'poison'], height: 10, weight: 130),
+  PokemonEntry(id: 3, name: 'venusaur',   types: ['grass', 'poison'], height: 20, weight: 1000),
+  PokemonEntry(id: 4, name: 'charmander', types: ['fire'],            height: 6,  weight: 85),
+  PokemonEntry(id: 5, name: 'charmeleon', types: ['fire'],            height: 11, weight: 190),
+  PokemonEntry(id: 6, name: 'charizard',  types: ['fire', 'flying'],  height: 17, weight: 905),
+  PokemonEntry(id: 7, name: 'squirtle',   types: ['water'],           height: 5,  weight: 90),
+  PokemonEntry(id: 8, name: 'wartortle',  types: ['water'],           height: 10, weight: 225),
+  PokemonEntry(id: 9, name: 'blastoise',  types: ['water'],           height: 16, weight: 855),
 ];
 
 class PokemonService {
@@ -99,10 +124,14 @@ class PokemonService {
         final types = (data['types'] as List)
             .map((t) => t['type']['name'] as String)
             .toList();
+        final height = (data['height'] as num?)?.toInt() ?? 10;
+        final weight = (data['weight'] as num?)?.toInt() ?? 100;
         return PokemonEntry(
           id: data['id'] as int,
           name: data['name'] as String,
           types: types,
+          height: height,
+          weight: weight,
         );
       } catch (_) {
         return null;
@@ -158,10 +187,14 @@ class PokemonService {
         final types = (data['types'] as List)
             .map((t) => t['type']['name'] as String)
             .toList();
+        final height = (data['height'] as num?)?.toInt() ?? 10;
+        final weight = (data['weight'] as num?)?.toInt() ?? 100;
         return PokemonEntry(
           id: data['id'] as int,
           name: data['name'] as String,
           types: types,
+          height: height,
+          weight: weight,
         );
       } catch (_) {
         return null;

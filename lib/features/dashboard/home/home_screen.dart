@@ -521,6 +521,39 @@ class _PokemonCardState extends State<_PokemonCard>
                       width: 90, height: 90),
                 ),
               ),
+              // Pokemon artwork — responsive size anchored to bottom-right
+              Positioned(
+                right: 4,
+                bottom: 4,
+                child: SizedBox(
+                  width: p.spriteSize,
+                  height: p.spriteSize,
+                  child: Image.network(
+                    p.spriteUrl,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Shimmer.fromColors(
+                        baseColor: Colors.white12,
+                        highlightColor: Colors.white30,
+                        child: Container(
+                          width: p.spriteSize,
+                          height: p.spriteSize,
+                          decoration: const BoxDecoration(
+                            color: Colors.white12,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (_, p0, p1) => Icon(
+                      Icons.catching_pokemon,
+                      color: Colors.white38,
+                      size: p.spriteSize * 0.55,
+                    ),
+                  ),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 child: Column(
@@ -550,36 +583,33 @@ class _PokemonCardState extends State<_PokemonCard>
                           .toList(),
                     ),
                     const Spacer(),
-                    // Pokemon artwork — plain Image.network, no CachedNetworkImage
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: SizedBox(
-                        width: 78,
-                        height: 78,
-                        child: Image.network(
-                          p.spriteUrl,
-                          fit: BoxFit.contain,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return Shimmer.fromColors(
-                              baseColor: Colors.white12,
-                              highlightColor: Colors.white30,
-                              child: Container(
-                                width: 78,
-                                height: 78,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white12,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (_, p0, p1) => const Icon(
-                            Icons.catching_pokemon,
-                            color: Colors.white38,
-                            size: 48,
-                          ),
+                    // Height badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          width: 0.8,
                         ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.straighten,
+                              size: 10, color: Colors.white60),
+                          const SizedBox(width: 3),
+                          Text(
+                            p.formattedHeight,
+                            style: GoogleFonts.inter(
+                              color: Colors.white70,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
