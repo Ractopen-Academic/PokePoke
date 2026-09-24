@@ -40,7 +40,7 @@ dependencies:
   cached_network_image: ^4.0.0
   flutter_svg: ^2.3.0
   shimmer: ^3.0.0
-  animate_do: ^3.3.4
+  animate_do: ^5.1.0
   flutter_animate: ^4.5.2
   http: ^1.2.2
   shared_preferences: ^2.3.5
