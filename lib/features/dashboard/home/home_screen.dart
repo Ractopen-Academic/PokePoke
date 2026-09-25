@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:neopop/neopop.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
+import 'package:pokepoke/features/dashboard/home/widgets/pokemon_detail_sheet.dart';
 
 // ─── Type → colour ───────────────────────────────────────────────────────────
 const Map<String, Color> _typeColors = {
@@ -488,6 +489,13 @@ class _PokemonCardState extends State<_PokemonCard>
       onTapDown: (_) => _press.forward(),
       onTapUp: (_) => _press.reverse(),
       onTapCancel: () => _press.reverse(),
+      onTap: () {
+        PokemonDetailSheet.show(
+          context,
+          pokemon: p,
+          typeColors: _typeColors,
+        );
+      },
       child: ScaleTransition(
         scale: _scale,
         child: Container(
