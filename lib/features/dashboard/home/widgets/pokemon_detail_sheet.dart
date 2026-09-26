@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:neopop/widgets/buttons/neopop_button/neopop_button.dart';
+import 'package:pokepoke/core/data/pokemon_species_data.dart';
 import 'package:pokepoke/core/services/evolution_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 
@@ -47,7 +47,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
   }
 
   Color _typeColor(String type) =>
-      widget.typeColors[type] ?? const Color(0xFFBDBDBD);
+      widget.typeColors[type.toLowerCase()] ?? const Color(0xFFBDBDBD);
 
   Future<void> _loadEvolutionChain() async {
     setState(() => _loadingEvolution = true);
@@ -65,26 +65,16 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
 
   void _switchToPokemon(EvolutionNode node) {
     if (node.id == _currentPokemon.id) return;
+    final species = getSpeciesData(node.id);
     setState(() {
       _currentPokemon = PokemonEntry(
         id: node.id,
         name: node.name,
-        types: _currentPokemon.types, // Inherit or default
-        height: _estimateHeight(node.id),
-        weight: _estimateWeight(node.id),
+        types: _currentPokemon.types,
+        height: species.height,
+        weight: species.weight,
       );
     });
-  }
-
-  int _estimateHeight(int id) {
-    if (id == widget.initialPokemon.id) return widget.initialPokemon.height;
-    // Basic heuristics: later stages are taller
-    return 14;
-  }
-
-  int _estimateWeight(int id) {
-    if (id == widget.initialPokemon.id) return widget.initialPokemon.weight;
-    return 300;
   }
 
   @override
@@ -94,8 +84,14 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
         ? _typeColor(_currentPokemon.types[1])
         : primaryColor.withValues(alpha: 0.6);
 
+    final species = getSpeciesData(
+      _currentPokemon.id,
+      fallbackHeight: _currentPokemon.height,
+      fallbackWeight: _currentPokemon.weight,
+    );
+
     return DraggableScrollableSheet(
-      initialChildSize: 0.85,
+      initialChildSize: 0.88,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (context, scrollController) {
@@ -120,7 +116,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
             children: [
               // Top drag pill
               Container(
-                margin: const EdgeInsets.only(top: 10, bottom: 6),
+                margin: const EdgeInsets.only(top: 10, bottom: 8),
                 width: 44,
                 height: 4,
                 decoration: BoxDecoration(
@@ -129,7 +125,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                 ),
               ),
 
-              // Header bar
+              // Header bar (Without the close X)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
@@ -156,16 +152,26 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                       ],
                     ),
                     const Spacer(),
-                    // Close button
-                    NeoPopButton(
-                      color: const Color(0xFF232338),
-                      bottomShadowColor: Colors.black54,
-                      rightShadowColor: Colors.black54,
-                      depth: 3,
-                      onTapUp: () => Navigator.of(context).pop(),
-                      child: const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Icon(Icons.close, color: Colors.white70, size: 18),
+                    // Species category badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: primaryColor.withValues(alpha: 0.4),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Text(
+                        species.category.toUpperCase(),
+                        style: GoogleFonts.inter(
+                          color: Colors.white70,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -176,7 +182,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
               Expanded(
                 child: ListView(
                   controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   children: [
                     // Type pills
                     Wrap(
@@ -203,7 +209,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
                     // Pokémon Centerfold Display
                     Center(
@@ -212,8 +218,8 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                         children: [
                           // Background radial glow
                           Container(
-                            width: 170,
-                            height: 170,
+                            width: 180,
+                            height: 180,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: RadialGradient(
@@ -228,8 +234,8 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                           // Pokémon Sprite
                           Image.network(
                             _currentPokemon.spriteUrl,
-                            width: 160,
-                            height: 160,
+                            width: 165,
+                            height: 165,
                             fit: BoxFit.contain,
                             errorBuilder: (_, p0, p1) => const Icon(
                               Icons.catching_pokemon,
@@ -240,7 +246,37 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
+
+                    // Pokédex Flavor Text / Lore Quote
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.format_quote,
+                              size: 18, color: primaryColor),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              species.description,
+                              style: GoogleFonts.inter(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                height: 1.4,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
 
                     // Dimensions Card (Height, Weight, Scale)
                     Container(
@@ -266,29 +302,122 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                           ),
                           Container(width: 1, height: 28, color: Colors.white12),
                           _specItem(
-                            icon: Icons.speed,
-                            label: 'SCALE TIER',
-                            value: _currentPokemon.height > 15
-                                ? 'Large'
-                                : _currentPokemon.height > 8
-                                    ? 'Medium'
-                                    : 'Small',
+                            icon: Icons.female,
+                            label: 'GENDER RATIO',
+                            value: species.genderRatio,
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 18),
+
+                    // ─── Abilities Section ──────────────────────────────────
+                    Text(
+                      '⚡ ABILITIES',
+                      style: GoogleFonts.pressStart2p(
+                        color: Colors.white70,
+                        fontSize: 9,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: species.abilities.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final ability = entry.value;
+                        final isHidden = index > 0;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isHidden
+                                ? Colors.purple.withValues(alpha: 0.15)
+                                : Colors.white.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isHidden
+                                  ? Colors.purple.withValues(alpha: 0.4)
+                                  : Colors.white24,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                ability,
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (isHidden) ...[
+                                const SizedBox(width: 5),
+                                Text(
+                                  '(HIDDEN)',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.purpleAccent,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // ─── Weaknesses Section ─────────────────────────────────
+                    Text(
+                      '🛡️ WEAKNESSES (2× DAMAGE)',
+                      style: GoogleFonts.pressStart2p(
+                        color: Colors.white70,
+                        fontSize: 9,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: species.weaknesses.map((weakType) {
+                        final typeKey = weakType.split(' ').first.toLowerCase();
+                        final color = _typeColor(typeKey);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: color.withValues(alpha: 0.6)),
+                          ),
+                          child: Text(
+                            weakType.toUpperCase(),
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
 
                     // ─── Evolution Chain Card ──────────────────────────────
                     Text(
                       '⚡ EVOLUTIONARY PATH',
                       style: GoogleFonts.pressStart2p(
                         color: const Color(0xFFFFCC00),
-                        fontSize: 10,
+                        fontSize: 9,
                         letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
 
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -326,7 +455,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                                         '${_currentPokemon.displayName} does not evolve.',
                                         style: GoogleFonts.inter(
                                           color: Colors.white70,
-                                          fontSize: 13,
+                                          fontSize: 12,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -340,18 +469,18 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                                   ),
                                 ),
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 20),
 
                     // ─── Base Combat Stats ─────────────────────────────────
                     Text(
-                      '⚔️ BASE STAT ESTIMATES',
+                      '⚔️ BASE COMBAT STATS',
                       style: GoogleFonts.pressStart2p(
                         color: Colors.white70,
-                        fontSize: 10,
+                        fontSize: 9,
                         letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
 
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -403,7 +532,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
               label,
               style: GoogleFonts.inter(
                 color: Colors.white38,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -414,7 +543,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
           value,
           style: GoogleFonts.inter(
             color: Colors.white,
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
         ),

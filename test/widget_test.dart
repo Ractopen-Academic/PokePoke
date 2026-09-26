@@ -21,8 +21,8 @@ void main() {
       );
 
       expect(bulbasaur.spriteSize, lessThan(venusaur.spriteSize));
-      expect(bulbasaur.spriteSize, inInclusiveRange(58.0, 70.0));
-      expect(venusaur.spriteSize, inInclusiveRange(85.0, 92.0));
+      expect(bulbasaur.spriteSize, inInclusiveRange(65.0, 72.0));
+      expect(venusaur.spriteSize, inInclusiveRange(110.0, 115.0));
     });
 
     test('Min and max bounds are respected', () {
@@ -42,8 +42,8 @@ void main() {
         weight: 2100,
       );
 
-      expect(tiny.spriteSize, equals(58.0));
-      expect(giant.spriteSize, equals(92.0));
+      expect(tiny.spriteSize, equals(56.0));
+      expect(giant.spriteSize, equals(114.0));
       expect(tiny.formattedHeight, equals('0.1 m'));
       expect(giant.formattedHeight, equals('8.8 m'));
     });

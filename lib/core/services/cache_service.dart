@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pokepoke/core/data/pokemon_seed.dart';
 
-const String _kCacheKey = 'pokemon_list_v2';
-const String _kCacheTimestampKey = 'pokemon_cache_ts_v2';
+const String _kCacheKey = 'pokemon_list_v4';
+const String _kCacheTimestampKey = 'pokemon_cache_ts_v4';
 // Refresh cache after 24 h
 const Duration _kCacheTTL = Duration(hours: 24);
 

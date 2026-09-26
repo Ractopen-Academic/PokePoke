@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
+import 'package:pokepoke/core/data/pokemon_species_data.dart';
 import 'package:pokepoke/core/services/cache_service.dart';
 
 class PokemonEntry {
@@ -25,14 +26,14 @@ class PokemonEntry {
   String get formattedHeight => '${(height / 10).toStringAsFixed(1)} m';
   String get formattedWeight => '${(weight / 10).toStringAsFixed(1)} kg';
 
-  /// Responsive sprite sizing bounded between min 58px and max 92px.
-  /// Small Pokémon (e.g. Caterpie, Bulbasaur) scale around 58-66px,
-  /// mid-stages around 72-78px, and giants (e.g. Venusaur, Charizard) up to 92px.
+  /// Responsive sprite sizing:
+  /// Bulbasaur (0.7m) scales to ~68px, Ivysaur (1.0m) to ~80px,
+  /// while large/stage 3 Pokémon like Venusaur (2.0m) scale up to 114px!
   double get spriteSize {
     const minH = 3.0; // 0.3 m
     const maxH = 20.0; // 2.0 m
-    const minSize = 58.0;
-    const maxSize = 92.0;
+    const minSize = 56.0;
+    const maxSize = 114.0;
 
     final clampedH = height.clamp(minH.toInt(), maxH.toInt()).toDouble();
     final factor = (clampedH - minH) / (maxH - minH);
@@ -44,12 +45,25 @@ class PokemonEntry {
       'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$id.png';
 
   factory PokemonEntry.fromMap(Map<String, dynamic> m) {
+    final id = m['id'] as int;
+    final species = getSpeciesData(id);
+    final rawH = (m['height'] as num?)?.toInt();
+    final rawW = (m['weight'] as num?)?.toInt();
+
+    // Auto-heal old cached entries where height was defaulted to 10
+    final resolvedHeight = (rawH != null && (rawH != 10 || species.height == 10))
+        ? rawH
+        : species.height;
+    final resolvedWeight = (rawW != null && (rawW != 100 || species.weight == 100))
+        ? rawW
+        : species.weight;
+
     return PokemonEntry(
-      id: m['id'] as int,
+      id: id,
       name: m['name'] as String,
       types: List<String>.from(m['types'] as List),
-      height: (m['height'] as num?)?.toInt() ?? 10,
-      weight: (m['weight'] as num?)?.toInt() ?? 100,
+      height: resolvedHeight,
+      weight: resolvedWeight,
     );
   }
 
@@ -124,8 +138,9 @@ class PokemonService {
         final types = (data['types'] as List)
             .map((t) => t['type']['name'] as String)
             .toList();
-        final height = (data['height'] as num?)?.toInt() ?? 10;
-        final weight = (data['weight'] as num?)?.toInt() ?? 100;
+        final species = getSpeciesData(id);
+        final height = (data['height'] as num?)?.toInt() ?? species.height;
+        final weight = (data['weight'] as num?)?.toInt() ?? species.weight;
         return PokemonEntry(
           id: data['id'] as int,
           name: data['name'] as String,
@@ -187,8 +202,9 @@ class PokemonService {
         final types = (data['types'] as List)
             .map((t) => t['type']['name'] as String)
             .toList();
-        final height = (data['height'] as num?)?.toInt() ?? 10;
-        final weight = (data['weight'] as num?)?.toInt() ?? 100;
+        final species = getSpeciesData(id);
+        final height = (data['height'] as num?)?.toInt() ?? species.height;
+        final weight = (data['weight'] as num?)?.toInt() ?? species.weight;
         return PokemonEntry(
           id: data['id'] as int,
           name: data['name'] as String,
