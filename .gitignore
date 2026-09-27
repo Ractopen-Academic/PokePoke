@@ -122,4 +122,4 @@ app.*.symbols
 .idea/
 *.iml
 .vscode/
-.metadata
+.metadata*.orig
