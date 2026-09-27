@@ -117,6 +117,39 @@ class PokemonService {
     return result;
   }
 
+  /// Fetch a single Pokémon by name or Pokédex number directly from PokeAPI.
+  static Future<PokemonEntry?> fetchSinglePokemon(String query) async {
+    final clean = query.trim().toLowerCase().replaceAll('#', '');
+    if (clean.isEmpty) return null;
+
+    try {
+      final res = await http.get(
+        Uri.parse('https://pokeapi.co/api/v2/pokemon/$clean'),
+        headers: {'User-Agent': 'PokePoke-App'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final id = data['id'] as int;
+        final types = (data['types'] as List)
+            .map((t) => t['type']['name'] as String)
+            .toList();
+        final species = getSpeciesData(id);
+        final height = (data['height'] as num?)?.toInt() ?? species.height;
+        final weight = (data['weight'] as num?)?.toInt() ?? species.weight;
+
+        return PokemonEntry(
+          id: id,
+          name: data['name'] as String,
+          types: types,
+          height: height,
+          weight: weight,
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
   /// Fetch the next [_pageSize] Pokémon starting at [offset] (by Pokédex number).
   /// Appends to the current cached list and returns the full updated list.
   static Future<List<PokemonEntry>> fetchMore({

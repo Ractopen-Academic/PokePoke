@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:neopop/neopop.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
+import 'package:pokepoke/core/services/cache_service.dart';
 import 'package:pokepoke/features/dashboard/home/widgets/pokemon_detail_sheet.dart';
 
 // ─── Type → colour ───────────────────────────────────────────────────────────
@@ -52,6 +53,8 @@ class _HomeScreenState extends State<HomeScreen>
   int _navIndex = 0;
   bool _loadingMore = false;
   bool _hasMore = true;
+  bool _searchingOnline = false;
+  String? _onlineSearchError;
 
   static const List<String> _typeFilters = [
     'All', 'fire', 'water', 'grass', 'electric',
@@ -79,16 +82,77 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _applyFilter() {
-    final q = _searchCtrl.text.toLowerCase();
+    final q = _searchCtrl.text.toLowerCase().trim();
+    final cleanId = q.replaceAll('#', '');
+    final targetId = int.tryParse(cleanId);
+
     setState(() {
+      _onlineSearchError = null;
       _filtered = _allPokemon.where((p) {
-        final matchSearch =
-            q.isEmpty || p.name.contains(q) || p.formattedId.contains(q);
+        final matchSearch = q.isEmpty ||
+            p.name.toLowerCase().contains(q) ||
+            p.formattedId.toLowerCase().contains(q) ||
+            (targetId != null && p.id == targetId);
         final matchType =
             _selectedType == 'All' || p.types.contains(_selectedType);
         return matchSearch && matchType;
       }).toList();
     });
+  }
+
+  Future<void> _searchOnline() async {
+    final query = _searchCtrl.text.trim();
+    if (query.isEmpty || _searchingOnline) return;
+
+    setState(() {
+      _searchingOnline = true;
+      _onlineSearchError = null;
+    });
+
+    final found = await PokemonService.fetchSinglePokemon(query);
+
+    if (!mounted) return;
+
+    if (found != null) {
+      setState(() {
+        if (!_allPokemon.any((p) => p.id == found.id)) {
+          _allPokemon.add(found);
+          _allPokemon.sort((a, b) => a.id.compareTo(b.id));
+        }
+        _searchingOnline = false;
+        _onlineSearchError = null;
+      });
+      await CacheService.savePokemon(
+          _allPokemon.map((p) => p.toMap()).toList());
+      _applyFilter();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF262640),
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle,
+                  color: Color(0xFF66BB6A), size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Indexed ${found.displayName} (${found.formattedId})!',
+                style: GoogleFonts.inter(
+                    color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      setState(() {
+        _searchingOnline = false;
+        _onlineSearchError =
+            'No Pokémon found with name or ID "$query" on PokéAPI.';
+      });
+    }
   }
 
   void _selectType(String type) {
@@ -191,12 +255,34 @@ class _HomeScreenState extends State<HomeScreen>
           child: TextField(
             controller: _searchCtrl,
             style: GoogleFonts.inter(color: Colors.white),
+            onSubmitted: (_) => _searchOnline(),
             decoration: InputDecoration(
               hintText: 'Search Pokémon name or #ID…',
               hintStyle:
                   GoogleFonts.inter(color: Colors.white38, fontSize: 13),
               prefixIcon:
                   const Icon(Icons.search, color: Colors.white38, size: 20),
+              suffixIcon: _searchCtrl.text.isNotEmpty
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.clear,
+                              color: Colors.white38, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            _applyFilter();
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.travel_explore,
+                              color: Color(0xFFFFCC00), size: 18),
+                          tooltip: 'Search Online',
+                          onPressed: _searchOnline,
+                        ),
+                      ],
+                    )
+                  : null,
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16, vertical: 13),
@@ -274,20 +360,116 @@ class _HomeScreenState extends State<HomeScreen>
   // ── Grid ────────────────────────────────────────────────────────────────────
   Widget _buildGrid() {
     if (_filtered.isEmpty) {
+      final isSearching = _searchCtrl.text.trim().isNotEmpty;
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SvgPicture.asset('assets/images/pokeball.svg',
-                width: 56,
-                height: 56,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SvgPicture.asset(
+                'assets/images/pokeball.svg',
+                width: 60,
+                height: 60,
                 colorFilter: const ColorFilter.mode(
-                    Colors.white24, BlendMode.srcIn)),
-            const SizedBox(height: 12),
-            Text('No Pokémon found',
-                style:
-                    GoogleFonts.inter(color: Colors.white38, fontSize: 13)),
-          ],
+                    Colors.white24, BlendMode.srcIn),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                isSearching
+                    ? 'No local match for "${_searchCtrl.text.trim()}"'
+                    : 'No Pokémon found',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (isSearching) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Search PokeAPI directly to find, fetch, and permanently index this Pokémon!',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: Colors.white38,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_onlineSearchError != null) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Colors.redAccent.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      _onlineSearchError!,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                NeoPopTiltedButton(
+                  isFloating: true,
+                  onTapUp: _searchOnline,
+                  color: const Color(0xFF6C5CE7),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 12),
+                    child: _searchingOnline
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'SEARCHING POKEAPI...',
+                                style: GoogleFonts.pressStart2p(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.travel_explore,
+                                  size: 16, color: Colors.white),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Search Online for "${_searchCtrl.text.trim()}"',
+                                style: GoogleFonts.inter(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     }
