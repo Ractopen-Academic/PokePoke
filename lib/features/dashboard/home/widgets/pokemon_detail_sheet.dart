@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pokepoke/core/data/pokemon_species_data.dart';
 import 'package:pokepoke/core/services/evolution_service.dart';
+import 'package:pokepoke/core/services/favourite_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 
 class PokemonDetailSheet extends StatefulWidget {
@@ -173,6 +174,40 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                           letterSpacing: 0.5,
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Favourite toggle button
+                    ValueListenableBuilder<Set<int>>(
+                      valueListenable: FavouriteService.favouritesNotifier,
+                      builder: (context, favIds, _) {
+                        final isFav = favIds.contains(_currentPokemon.id);
+                        return GestureDetector(
+                          onTap: () =>
+                              FavouriteService.toggleFavourite(_currentPokemon.id),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: isFav
+                                  ? const Color(0xFFFF3B56).withValues(alpha: 0.2)
+                                  : Colors.white.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isFav
+                                    ? const Color(0xFFFF3B56)
+                                    : Colors.white24,
+                              ),
+                            ),
+                            child: Icon(
+                              isFav ? Icons.favorite : Icons.favorite_border,
+                              color: isFav
+                                  ? const Color(0xFFFF3B56)
+                                  : Colors.white60,
+                              size: 16,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

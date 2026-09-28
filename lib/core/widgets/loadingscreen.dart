@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pokepoke/core/services/cache_service.dart';
+import 'package:pokepoke/core/services/favourite_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 import 'package:pokepoke/core/widgets/loading_screen/loading_screen.dart';
 import 'package:pokepoke/features/dashboard/home/home_screen.dart';
@@ -136,6 +137,7 @@ class _SplashScreenState extends State<SplashScreen>
     _setStatus('Loading built-in Pokémon data…', 0.15);
     try {
       await CacheService.init().timeout(const Duration(seconds: 3));
+      await FavouriteService.init().timeout(const Duration(seconds: 2));
     } catch (_) {}
 
     _setStatus('Preparing Pokédex…', 0.55);

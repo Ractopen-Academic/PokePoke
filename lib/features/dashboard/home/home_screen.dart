@@ -6,6 +6,8 @@ import 'package:neopop/neopop.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 import 'package:pokepoke/core/services/cache_service.dart';
+import 'package:pokepoke/core/services/favourite_service.dart';
+import 'package:pokepoke/features/dashboard/favourite/favourite_screen.dart';
 import 'package:pokepoke/features/dashboard/home/widgets/pokemon_detail_sheet.dart';
 
 // ─── Type → colour ───────────────────────────────────────────────────────────
@@ -186,20 +188,96 @@ class _HomeScreenState extends State<HomeScreen>
         children: [
           _AnimatedBg(controller: _bgController),
           SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                _buildSearchBar(),
-                _buildTypeFilter(),
-                _buildSectionTitle(),
-                Expanded(child: _buildGrid()),
-              ],
-            ),
+            child: _buildBody(),
           ),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  Widget _buildBody() {
+    switch (_navIndex) {
+      case 1:
+        return FavouriteScreen(
+          allPokemon: _allPokemon,
+          typeColors: _typeColors,
+          onExplore: () => setState(() => _navIndex = 0),
+        );
+      case 2:
+        return _buildPlaceholderTab(
+          'BATTLE ARENA',
+          'Battle mode coming soon in a future update!',
+          Icons.sports_kabaddi,
+        );
+      case 3:
+        return _buildPlaceholderTab(
+          'TRAINER PROFILE',
+          'Trainer profile & achievements coming soon!',
+          Icons.person_outline,
+        );
+      case 0:
+      default:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(),
+            _buildSearchBar(),
+            _buildTypeFilter(),
+            _buildSectionTitle(),
+            Expanded(child: _buildGrid()),
+          ],
+        );
+    }
+  }
+
+  Widget _buildPlaceholderTab(String title, String subtitle, IconData icon) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 60, color: Colors.white24),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: GoogleFonts.pressStart2p(
+                color: Colors.white,
+                fontSize: 12,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color: Colors.white54,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            NeoPopTiltedButton(
+              isFloating: true,
+              onTapUp: () => setState(() => _navIndex = 0),
+              color: const Color(0xFFFF1C1C),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Text(
+                  'BACK TO POKÉDEX',
+                  style: GoogleFonts.pressStart2p(
+                    color: Colors.white,
+                    fontSize: 9,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -565,64 +643,106 @@ class _HomeScreenState extends State<HomeScreen>
 
   // ── Bottom nav ──────────────────────────────────────────────────────────────
   Widget _buildBottomNav() {
-    const items = [
-      (Icons.catching_pokemon, 'Pokédex'),
-      (Icons.favorite_border, 'Favourites'),
-      (Icons.sports_kabaddi, 'Battle'),
-      (Icons.person_outline, 'Profile'),
-    ];
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF16213E),
-        border: Border(top: BorderSide(color: Colors.white10)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(items.length, (i) {
-              final (icon, label) = items[i];
-              final active = _navIndex == i;
-              return GestureDetector(
-                onTap: () => setState(() => _navIndex = i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: active
-                        ? const Color(0xFFFF1C1C).withValues(alpha: 0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(icon,
-                          color: active
-                              ? const Color(0xFFFF1C1C)
-                              : Colors.white38,
-                          size: 22),
-                      const SizedBox(height: 2),
-                      Text(label,
-                          style: GoogleFonts.inter(
+    return ValueListenableBuilder<Set<int>>(
+      valueListenable: FavouriteService.favouritesNotifier,
+      builder: (context, favs, _) {
+        final items = [
+          (Icons.catching_pokemon, 'Pokédex', 0),
+          (Icons.favorite_border, 'Favourites', favs.length),
+          (Icons.sports_kabaddi, 'Battle', 0),
+          (Icons.person_outline, 'Profile', 0),
+        ];
+
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF16213E),
+            border: Border(top: BorderSide(color: Colors.white10)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: List.generate(items.length, (i) {
+                  final (icon, label, badgeCount) = items[i];
+                  final active = _navIndex == i;
+                  return GestureDetector(
+                    onTap: () => setState(() => _navIndex = i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? const Color(0xFFFF1C1C).withValues(alpha: 0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Icon(
+                                icon,
+                                color: active
+                                    ? const Color(0xFFFF1C1C)
+                                    : Colors.white38,
+                                size: 22,
+                              ),
+                              if (badgeCount > 0)
+                                Positioned(
+                                  top: -4,
+                                  right: -8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF3B56),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 14,
+                                      minHeight: 14,
+                                    ),
+                                    child: Text(
+                                      '$badgeCount',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            label,
+                            style: GoogleFonts.inter(
                               color: active
                                   ? const Color(0xFFFF1C1C)
                                   : Colors.white38,
                               fontSize: 10,
                               fontWeight: active
                                   ? FontWeight.w700
-                                  : FontWeight.w400)),
-                    ],
-                  ),
-                ),
-              );
-            }),
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -750,13 +870,49 @@ class _PokemonCardState extends State<_PokemonCard>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ID
-                    Text(p.formattedId,
-                        style: GoogleFonts.inter(
+                    // ID and Favourite button
+                    Row(
+                      children: [
+                        Text(
+                          p.formattedId,
+                          style: GoogleFonts.inter(
                             color: Colors.white54,
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            letterSpacing: 1)),
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const Spacer(),
+                        ValueListenableBuilder<Set<int>>(
+                          valueListenable: FavouriteService.favouritesNotifier,
+                          builder: (context, favs, _) {
+                            final isFav = favs.contains(p.id);
+                            return GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                FavouriteService.toggleFavourite(p.id);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: isFav
+                                      ? const Color(0xFFFF3B56).withValues(alpha: 0.3)
+                                      : Colors.black.withValues(alpha: 0.25),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  isFav ? Icons.favorite : Icons.favorite_border,
+                                  size: 13,
+                                  color: isFav
+                                      ? const Color(0xFFFF3B56)
+                                      : Colors.white60,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                     // Name
                     Text(p.displayName,
                         style: GoogleFonts.inter(
