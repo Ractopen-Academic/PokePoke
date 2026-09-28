@@ -27,13 +27,15 @@ class PokemonEntry {
   String get formattedWeight => '${(weight / 10).toStringAsFixed(1)} kg';
 
   /// Responsive sprite sizing:
-  /// Bulbasaur (0.7m) scales to ~68px, Ivysaur (1.0m) to ~80px,
-  /// while large/stage 3 Pokémon like Venusaur (2.0m) scale up to 114px!
+  /// Small Pokémon (e.g. Caterpie, Sandshrew, Bulbasaur) scale around 72-78px,
+  /// mid-stages (Ivysaur, Raichu) around 82-88px,
+  /// large stages (Charizard, Ekans) around 96-102px,
+  /// and giants (Venusaur, Arbok) scale up to 125px!
   double get spriteSize {
     const minH = 3.0; // 0.3 m
-    const maxH = 20.0; // 2.0 m
-    const minSize = 56.0;
-    const maxSize = 114.0;
+    const maxH = 35.0; // 3.5 m (Arbok)
+    const minSize = 72.0;
+    const maxSize = 125.0;
 
     final clampedH = height.clamp(minH.toInt(), maxH.toInt()).toDouble();
     final factor = (clampedH - minH) / (maxH - minH);

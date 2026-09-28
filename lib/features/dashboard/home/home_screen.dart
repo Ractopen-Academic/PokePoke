@@ -245,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen>
     return FadeInDown(
       delay: const Duration(milliseconds: 100),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white10,
@@ -285,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen>
                   : null,
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 13),
+                  horizontal: 16, vertical: 11),
             ),
           ),
         ),
@@ -298,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen>
     return FadeInDown(
       delay: const Duration(milliseconds: 150),
       child: SizedBox(
-        height: 42,
+        height: 34,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -314,7 +314,7 @@ class _HomeScreenState extends State<HomeScreen>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 8),
+                    horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
                   color: selected ? color : Colors.white10,
                   borderRadius: BorderRadius.circular(20),
@@ -346,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen>
   // ── Section title ───────────────────────────────────────────────────────────
   Widget _buildSectionTitle() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
       child: Text(
         '${_filtered.length} Pokémon found',
         style: GoogleFonts.inter(
@@ -713,14 +713,15 @@ class _PokemonCardState extends State<_PokemonCard>
               ),
               // Pokemon artwork — responsive size anchored to bottom-right
               Positioned(
-                right: 4,
-                bottom: 4,
+                right: 0,
+                bottom: 0,
                 child: SizedBox(
                   width: p.spriteSize,
                   height: p.spriteSize,
                   child: Image.network(
                     p.spriteUrl,
                     fit: BoxFit.contain,
+                    alignment: Alignment.bottomRight,
                     loadingBuilder: (context, child, progress) {
                       if (progress == null) return child;
                       return Shimmer.fromColors(
