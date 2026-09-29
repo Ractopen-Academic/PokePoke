@@ -1,5 +1,4 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 import 'package:pokepoke/core/services/cache_service.dart';
 
 class EvolutionNode {
@@ -49,6 +48,13 @@ class EvolutionChainData {
             .toList(),
       );
 }
+
+final _dio = Dio(BaseOptions(
+  baseUrl: 'https://pokeapi.co/api/v2',
+  connectTimeout: const Duration(seconds: 8),
+  receiveTimeout: const Duration(seconds: 8),
+  headers: {'User-Agent': 'PokePoke-App'},
+));
 
 class EvolutionService {
   static final Map<int, EvolutionChainData> _cache = {};
@@ -202,23 +208,13 @@ class EvolutionService {
 
     // Attempt PokeAPI fetch
     try {
-      final speciesRes = await http.get(
-        Uri.parse('https://pokeapi.co/api/v2/pokemon-species/$pokemonId'),
-        headers: {'User-Agent': 'PokePoke-App'},
-      ).timeout(const Duration(seconds: 6));
+      final speciesRes = await _dio.get('/pokemon-species/$pokemonId');
+      final speciesData = speciesRes.data as Map<String, dynamic>;
+      final evolutionChainUrl = speciesData['evolution_chain']?['url'] as String?;
 
-      if (speciesRes.statusCode == 200) {
-        final speciesData = jsonDecode(speciesRes.body);
-        final evolutionChainUrl = speciesData['evolution_chain']?['url'] as String?;
-
-        if (evolutionChainUrl != null) {
-          final evoRes = await http.get(
-            Uri.parse(evolutionChainUrl),
-            headers: {'User-Agent': 'PokePoke-App'},
-          ).timeout(const Duration(seconds: 6));
-
-          if (evoRes.statusCode == 200) {
-            final evoData = jsonDecode(evoRes.body);
+      if (evolutionChainUrl != null) {
+        final evoRes = await Dio().get(evolutionChainUrl);
+        final evoData = evoRes.data as Map<String, dynamic>;
             final nodes = <EvolutionNode>[];
             _parseChainNode(evoData['chain'], nodes);
             if (nodes.isNotEmpty) {
@@ -232,8 +228,6 @@ class EvolutionService {
               }
               return result;
             }
-          }
-        }
       }
     } catch (_) {
       // Fall through to fallback

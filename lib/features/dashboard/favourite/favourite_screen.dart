@@ -5,19 +5,19 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:neopop/widgets/buttons/neopop_tilted_button/neopop_tilted_button.dart';
 import 'package:pokepoke/core/services/favourite_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
+import 'package:pokepoke/core/utils/type_colors.dart';
+import 'package:pokepoke/core/widgets/shimmer_box.dart';
 import 'package:pokepoke/features/dashboard/home/widgets/pokemon_detail_sheet.dart';
-import 'package:shimmer/shimmer.dart';
+
 
 class FavouriteScreen extends StatefulWidget {
   final List<PokemonEntry> allPokemon;
-  final Map<String, Color> typeColors;
   final VoidCallback? onExplore;
   final void Function(String type)? onSelectType;
 
   const FavouriteScreen({
     super.key,
     required this.allPokemon,
-    required this.typeColors,
     this.onExplore,
     this.onSelectType,
   });
@@ -29,14 +29,12 @@ class FavouriteScreen extends StatefulWidget {
 class _FavouriteScreenState extends State<FavouriteScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
 
-  Color _typeColor(String type) =>
-      widget.typeColors[type.toLowerCase()] ?? const Color(0xFFBDBDBD);
-
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -167,13 +165,13 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
                             return _FavouriteCard(
                               key: ValueKey(p.id),
                               pokemon: p,
-                              typeColor: _typeColor,
+                              typeColor: typeColor,
                               onSelectType: widget.onSelectType,
                               onTap: () {
                                 PokemonDetailSheet.show(
                                   context,
                                   pokemon: p,
-                                  typeColors: widget.typeColors,
+                                  typeColors: kTypeColors,
                                   onSelectType: widget.onSelectType,
                                 );
                               },
@@ -330,18 +328,7 @@ class _FavouriteCard extends StatelessWidget {
                   imageUrl: p.spriteUrl,
                   fit: BoxFit.contain,
                   alignment: Alignment.bottomRight,
-                  placeholder: (context, url) => Shimmer.fromColors(
-                    baseColor: Colors.white12,
-                    highlightColor: Colors.white30,
-                    child: Container(
-                      width: p.spriteSize,
-                      height: p.spriteSize,
-                      decoration: const BoxDecoration(
-                        color: Colors.white12,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
+                  placeholder: (context, url) => ShimmerBox(size: p.spriteSize),
                   errorWidget: (_, p0, p1) => Icon(
                     Icons.catching_pokemon,
                     color: Colors.white38,

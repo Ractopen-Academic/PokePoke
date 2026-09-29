@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:animate_do/animate_do.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -514,10 +514,9 @@ class _BattleScreenState extends State<BattleScreen> {
               ),
               child: Row(
                 children: [
-                  FadeInLeft(
-                    child: Text('WILD ${mon.name.toUpperCase()}!',
-                        style: GoogleFonts.pressStart2p(color: const Color(0xFFFFCC00), fontSize: 9)),
-                  ),
+                  Text('WILD ${mon.name.toUpperCase()}!',
+                      style: GoogleFonts.pressStart2p(color: const Color(0xFFFFCC00), fontSize: 9))
+                      .animate().fadeIn().slideX(begin: -0.3, curve: Curves.easeOut),
                   const Spacer(),
                   GestureDetector(
                     onTap: _flee,

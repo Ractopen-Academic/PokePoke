@@ -5,18 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pokepoke/core/services/audio_service.dart';
+import 'package:pokepoke/core/utils/type_colors.dart';
 import 'package:pokepoke/core/widgets/hold_to_spam_button.dart';
+import 'package:pokepoke/core/widgets/shimmer_box.dart';
 import 'package:pokepoke/features/battle/data/battle_pen_service.dart';
 import 'package:pokepoke/features/battle/data/caught_pokemon.dart';
-import 'package:shimmer/shimmer.dart';
 
 class ProfileSafariScreen extends StatefulWidget {
-  final Map<String, Color> typeColors;
   final VoidCallback? onGoToBattle;
 
   const ProfileSafariScreen({
     super.key,
-    required this.typeColors,
     this.onGoToBattle,
   });
 
@@ -27,8 +26,7 @@ class ProfileSafariScreen extends StatefulWidget {
 class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
   bool _isParkView = true;
 
-  Color _typeColor(String type) =>
-      widget.typeColors[type.toLowerCase()] ?? const Color(0xFFBDBDBD);
+
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +43,7 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
                   : (_isParkView
                       ? _RoamingParkView(
                           penList: penList,
-                          typeColor: _typeColor,
+                          typeColor: typeColor,
                           onTrain: (p) => _trainPokemon(p),
                           onOpenInventory: () => _openInventorySheet(penList),
                         )
@@ -189,7 +187,7 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
                         final p = updatedList[i];
                         return _InventoryTile(
                           pokemon: p,
-                          color: _typeColor(p.types.firstOrNull ?? 'normal'),
+                          color: typeColor(p.types.firstOrNull ?? 'normal'),
                           onTrain: () => _trainPokemon(p),
                           onRelease: () => _confirmRelease(p),
                         );
@@ -219,7 +217,7 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
         final p = penList[i];
         return _SafariCard(
           pokemon: p,
-          color: _typeColor(p.types.firstOrNull ?? 'normal'),
+          color: typeColor(p.types.firstOrNull ?? 'normal'),
           onTrain: () => _trainPokemon(p),
           onRelease: () => _confirmRelease(p),
         );
@@ -620,11 +618,7 @@ class _SafariCard extends StatelessWidget {
               child: CachedNetworkImage(
                 imageUrl: pokemon.spriteUrl,
                 fit: BoxFit.contain,
-                placeholder: (context, url) => Shimmer.fromColors(
-                  baseColor: Colors.white12,
-                  highlightColor: Colors.white24,
-                  child: Container(width: 50, height: 50, color: Colors.white12),
-                ),
+                placeholder: (context, url) => const ShimmerBox(size: 50),
               ),
             ),
           ),

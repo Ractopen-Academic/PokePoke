@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-import 'package:animate_do/animate_do.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -260,119 +260,113 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _buildProgress() {
-    return FadeInUp(
-      delay: const Duration(milliseconds: 500),
-      child: Column(
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: Text(
-              _statusText,
-              key: ValueKey(_statusText),
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: Colors.white54, fontSize: 11),
-            ),
+    return Column(
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: Text(
+            _statusText,
+            key: ValueKey(_statusText),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(color: Colors.white54, fontSize: 11),
           ),
-          const SizedBox(height: 10),
-          // Progress bar with animated glow
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: _progress,
-                  minHeight: 5,
-                  backgroundColor: Colors.white10,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFFFF1C1C)),
-                ),
+        ),
+        const SizedBox(height: 10),
+        // Progress bar with animated glow
+        Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: _progress,
+                minHeight: 5,
+                backgroundColor: Colors.white10,
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color(0xFFFF1C1C)),
               ),
-              // Glow overlay
-              if (_progress > 0)
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: (MediaQuery.of(context).size.width - 56) * _progress,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF1C1C).withValues(alpha: 0.6),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
+            ),
+            // Glow overlay
+            if (_progress > 0)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: (MediaQuery.of(context).size.width - 56) * _progress,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF1C1C).withValues(alpha: 0.6),
+                        blurRadius: 8,
+                      ),
+                    ],
                   ),
                 ),
-            ],
-          ),
-        ],
-      ),
-    );
+              ),
+          ],
+        ),
+      ],
+    ).animate().fadeIn(delay: 500.ms, duration: 400.ms).slideY(begin: 0.2, curve: Curves.easeOut);
   }
 
   Widget _buildTipCard() {
-    return FadeInUp(
-      delay: const Duration(milliseconds: 600),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.white.withValues(alpha: 0.07),
-              Colors.white.withValues(alpha: 0.03),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white12),
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.tips_and_updates_outlined,
-                    color: Color(0xFFFF1C1C), size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  'TRAINER TIP',
-                  style: GoogleFonts.pressStart2p(
-                      color: const Color(0xFFFF1C1C),
-                      fontSize: 8,
-                      letterSpacing: 2),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 500),
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.12),
-                    end: Offset.zero,
-                  ).animate(anim),
-                  child: child,
-                ),
-              ),
-              child: Text(
-                _currentTip,
-                key: ValueKey(_currentTip),
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                    color: Colors.white70, fontSize: 12, height: 1.6),
-              ),
-            ),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.07),
+            Colors.white.withValues(alpha: 0.03),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white12),
       ),
-    );
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.tips_and_updates_outlined,
+                  color: Color(0xFFFF1C1C), size: 14),
+              const SizedBox(width: 6),
+              Text(
+                'TRAINER TIP',
+                style: GoogleFonts.pressStart2p(
+                    color: const Color(0xFFFF1C1C),
+                    fontSize: 8,
+                    letterSpacing: 2),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 500),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.12),
+                  end: Offset.zero,
+                ).animate(anim),
+                child: child,
+              ),
+            ),
+            child: Text(
+              _currentTip,
+              key: ValueKey(_currentTip),
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                  color: Colors.white70, fontSize: 12, height: 1.6),
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 600.ms, duration: 400.ms).slideY(begin: 0.2, curve: Curves.easeOut);
   }
 }
 

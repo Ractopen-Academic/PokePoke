@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 import 'package:pokepoke/core/data/pokemon_species_data.dart';
 import 'package:pokepoke/core/services/cache_service.dart';
 
@@ -93,6 +92,13 @@ final List<PokemonEntry> kBuiltInPokemon = [
   PokemonEntry(id: 9, name: 'blastoise',  types: ['water'],           height: 16, weight: 855),
 ];
 
+final _dio = Dio(BaseOptions(
+  baseUrl: 'https://pokeapi.co/api/v2',
+  connectTimeout: const Duration(seconds: 8),
+  receiveTimeout: const Duration(seconds: 8),
+  headers: {'User-Agent': 'PokePoke-App'},
+));
+
 class PokemonService {
   static const int _pageSize = 10;
 
@@ -125,13 +131,8 @@ class PokemonService {
     if (clean.isEmpty) return null;
 
     try {
-      final res = await http.get(
-        Uri.parse('https://pokeapi.co/api/v2/pokemon/$clean'),
-        headers: {'User-Agent': 'PokePoke-App'},
-      ).timeout(const Duration(seconds: 8));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+      final res = await _dio.get('/pokemon/$clean');
+      final data = res.data as Map<String, dynamic>;
         final id = data['id'] as int;
         final types = (data['types'] as List)
             .map((t) => t['type']['name'] as String)
@@ -150,7 +151,6 @@ class PokemonService {
         // Persist to cache
         await CacheService.upsertPokemon(entry.toMap());
         return entry;
-      }
     } catch (_) {}
     return null;
   }
@@ -174,10 +174,8 @@ class PokemonService {
       final id = beginId + i;
       if (id > 1025) return null; // Pokédex cap
       try {
-        final res = await http
-            .get(Uri.parse('https://pokeapi.co/api/v2/pokemon/$id'))
-            .timeout(const Duration(seconds: 8));
-        final data = jsonDecode(res.body);
+        final res = await _dio.get('/pokemon/$id');
+        final data = res.data as Map<String, dynamic>;
         final types = (data['types'] as List)
             .map((t) => t['type']['name'] as String)
             .toList();
@@ -246,10 +244,8 @@ class PokemonService {
     final futures = List.generate(20, (i) async {
       final id = i + 1;
       try {
-        final res = await http
-            .get(Uri.parse('https://pokeapi.co/api/v2/pokemon/$id'))
-            .timeout(const Duration(seconds: 8));
-        final data = jsonDecode(res.body);
+        final res = await _dio.get('/pokemon/$id');
+        final data = res.data as Map<String, dynamic>;
         final types = (data['types'] as List)
             .map((t) => t['type']['name'] as String)
             .toList();
