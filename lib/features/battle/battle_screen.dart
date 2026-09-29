@@ -317,13 +317,17 @@ class _BattleScreenState extends State<BattleScreen> {
         children: [
           const Icon(Icons.directions_walk, color: Color(0xFF00E676), size: 24),
           const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('POKÉWALK', style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 13)),
-              const SizedBox(height: 2),
-              Text('Hold to Walk or Move Physically', style: GoogleFonts.inter(color: Colors.white38, fontSize: 10)),
-            ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('POKÉWALK', style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 13)),
+                const SizedBox(height: 2),
+                Text('Hold to Walk or Move Physically',
+                    style: GoogleFonts.inter(color: Colors.white38, fontSize: 10),
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
           const Spacer(),
           // Audio mute/unmute
