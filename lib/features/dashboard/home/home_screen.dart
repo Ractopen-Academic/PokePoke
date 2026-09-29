@@ -10,6 +10,8 @@ import 'package:pokepoke/core/services/cache_service.dart';
 import 'package:pokepoke/core/services/favourite_service.dart';
 import 'package:pokepoke/features/dashboard/favourite/favourite_screen.dart';
 import 'package:pokepoke/features/dashboard/home/widgets/pokemon_detail_sheet.dart';
+import 'package:pokepoke/features/battle/battle_screen.dart';
+import 'package:pokepoke/features/dashboard/profile/profile_safari_screen.dart';
 
 // ─── Type → colour ───────────────────────────────────────────────────────────
 const Map<String, Color> _typeColors = {
@@ -285,16 +287,14 @@ class _HomeScreenState extends State<HomeScreen>
           },
         );
       case 2:
-        return _buildPlaceholderTab(
-          'BATTLE ARENA',
-          'Battle mode coming soon in a future update!',
-          Icons.sports_kabaddi,
+        return BattleScreen(
+          allPokemon: _allPokemon,
+          onGoToSafari: () => setState(() => _navIndex = 3),
         );
       case 3:
-        return _buildPlaceholderTab(
-          'TRAINER PROFILE',
-          'Trainer profile & achievements coming soon!',
-          Icons.person_outline,
+        return ProfileSafariScreen(
+          typeColors: _typeColors,
+          onGoToBattle: () => setState(() => _navIndex = 2),
         );
       case 0:
       default:
@@ -311,6 +311,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ignore: unused_element
   Widget _buildPlaceholderTab(String title, String subtitle, IconData icon) {
     return Center(
       child: Padding(

@@ -32,6 +32,8 @@ A retro-styled Pokémon companion mobile application developed with Flutter. It 
 - **Specific Search with Online Fallback**: Supports instantaneous filtering by name or Pokédex number (`25`, `#025`, `pikachu`). If an entry is not present in local storage, a dedicated "Search Online" action queries PokéAPI directly, indexes the response, and caches it locally.
 - **Persistent Favourites System**: Direct heart toggles on cards and within the detail view allow users to bookmark Pokémon. State is synchronized across views via a reactive notifier and persisted through local storage. The bottom navigation bar displays a live item counter badge.
 - **NeoPoP Design Architecture**: Employs elevated surfaces, custom press mechanics, and retro typography.
+- **PokéWalk Mini-Game (Battle Tab)**: Walk a randomized distance (10–50 steps) through the tall grass meadow to trigger wild encounters. Wild Pokémon roam dynamically across the arena field. Tap 2 times to weaken and capture the wild Pokémon into your local Safari Pen.
+- **Safari Pen & Auto-Evolution (Profile Tab)**: Store up to 20 caught Pokémon locally with individual level and XP tracking. Tap a Pokémon to train (+25 XP). Once a Pokémon reaches its level threshold, it automatically evolves using PokéAPI evolution tree data. Unwanted Pokémon can be released back into the wild to free up pen slots.
 - **Offline Reliability**: Bundles a verified initial seed dataset and instant evolution mappings to ensure zero-latency initial rendering.
 
 ---
@@ -47,6 +49,30 @@ A retro-styled Pokémon companion mobile application developed with Flutter. It 
 | **Google Fonts** | ![Google Fonts](https://img.shields.io/badge/Google_Fonts-4285F4?style=flat&logo=google&logoColor=white) | Typography assets (`PressStart2P`, `Inter`) |
 | **SharedPreferences** | ![SharedPreferences](https://img.shields.io/badge/Shared_Preferences-4CAF50?style=flat&logo=sqlite&logoColor=white) | Key-value local storage |
 | **HTTP Networking** | ![HTTP](https://img.shields.io/badge/HTTP-009688?style=flat&logo=apache-http-server&logoColor=white) | Network communication and connectivity checks |
+
+---
+
+## API Endpoints
+
+1. **Fetch Pokémon by Name or Pokédex ID:**
+   - **Endpoint:** `GET https://pokeapi.co/api/v2/pokemon/{name_or_id}`
+   - **File:** `pokemon_service.dart:129`
+   - **Usage:** Used in `fetchSinglePokemon` (for search & evolution details) and `fetchMore` (batching 10 Pokémon at a time by sequential ID).
+
+2. **Fetch Pokémon Species Data (Evolution Chain Discovery):**
+   - **Endpoint:** `GET https://pokeapi.co/api/v2/pokemon-species/{id}`
+   - **File:** `evolution_service.dart:204`
+   - **Usage:** Retrieves the species details to find the specific `evolution_chain` resource URL for that Pokémon.
+
+3. **Fetch Evolution Chain Structure:**
+   - **Endpoint:** `GET https://pokeapi.co/api/v2/evolution-chain/{id}/`
+   - **File:** `evolution_service.dart:214`
+   - **Usage:** Parses evolution nodes, evolution triggers (Level, Stone, Trade, Friendship), and species sequence.
+
+4. **Official High-Res Artwork (Sprite CDN):**
+   - **URL:** `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{id}.png`
+   - **Files:** `pokemon_service.dart:46`, `evolution_service.dart:18`
+   - **Usage:** High-resolution official Pokémon artwork cached to disk via `CachedNetworkImage`.
 
 ---
 
@@ -73,16 +99,25 @@ pokepoke/
 │   │       └── loading_screen/
 │   │           └── loading_screen.dart  # Continuous spinning vector indicator
 │   └── features/
+│       ├── battle/
+│       │   ├── battle_screen.dart       # PokéWalk walking tracker, roaming field & tap-to-catch
+│       │   └── data/
+│       │       ├── caught_pokemon.dart  # Caught Pokémon data model with XP progression
+│       │       └── battle_pen_service.dart # Safari Pen storage (20 max), release & auto-evolution
 │       └── dashboard/
 │           ├── home/
 │           │   ├── home_screen.dart     # Pokédex feed, search, type filters, and navigation
 │           │   └── widgets/
 │           │       └── pokemon_detail_sheet.dart # Modal view with interactive evolution tree
-│           └── favourite/
-│               └── favourite_screen.dart# Saved Pokémon collection view
+│           ├── favourite/
+│           │   └── favourite_screen.dart# Saved Pokémon collection view
+│           └── profile/
+│               └── profile_safari_screen.dart # Safari Pen view, training & evolution interface
 ├── test/
 │   ├── widget_test.dart                 # Size scaling boundary and calculation tests
-│   └── favourite_test.dart              # Favourites service and persistence tests
+│   ├── favourite_test.dart              # Favourites service and persistence tests
+│   ├── battle_pen_test.dart             # Safari Pen capacity, XP, and auto-evolution tests
+│   └── pokemon_index_cache_test.dart    # Evolution tree parsing and persistent cache tests
 ├── pubspec.yaml                         # Dependency definitions and asset configuration
 └── gituser.md                           # Team attribution and contributor quotas
 ```
@@ -107,6 +142,18 @@ pokepoke/
 ### 4. Favourites Screen (`FavouriteScreen`)
 - Dedicated view presenting saved Pokémon records with individual search and removal capabilities.
 - Synchronized globally using a reactive notifier.
+
+### 5. PokéWalk Arena (`BattleScreen`)
+- Walking simulator requiring randomized 10–50 steps to trigger tall-grass wild Pokémon encounters.
+- Wild Pokémon roams and spreads dynamically across an animated arena grid.
+- Tap 2 times to weaken and capture the roaming Pokémon into the local Safari Pen.
+- Directly links to the Safari Pen and prevents captures when the 20-slot capacity is reached.
+
+### 6. Safari Pen & Training (`ProfileSafariScreen`)
+- Displays up to 20 captured Pokémon stored locally in the trainer's Safari Pen.
+- "TRAIN +25" button grants XP, advancing Pokémon towards their next level threshold.
+- Automatically discovers PokéAPI evolution chains and triggers auto-evolution celebrations once level requirements are met.
+- Provides a release/discard mechanism to free up Safari Pen slots.
 - Includes an empty-state action returning the user to the primary Pokédex feed.
 
 ---
