@@ -4,11 +4,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:neopop/neopop.dart';
 import 'package:pokepoke/core/services/audio_service.dart';
 import 'package:pokepoke/core/utils/type_colors.dart';
 import 'package:pokepoke/core/widgets/poke_dark_dialog.dart';
 import 'package:pokepoke/core/widgets/hold_to_spam_button.dart';
-import 'package:pokepoke/core/widgets/shimmer_box.dart';
 import 'package:pokepoke/features/battle/data/battle_pen_service.dart';
 import 'package:pokepoke/features/battle/data/caught_pokemon.dart';
 
@@ -25,9 +25,6 @@ class ProfileSafariScreen extends StatefulWidget {
 }
 
 class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
-  bool _isParkView = true;
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -37,18 +34,13 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
         return Column(
           children: [
             _buildHeader(penList),
-            _buildModeBar(penList),
             Expanded(
               child: penList.isEmpty
                   ? _buildEmptyState()
-                  : (_isParkView
-                      ? _RoamingParkView(
-                          penList: penList,
-                          typeColor: typeColor,
-                          onTrain: (p) => _trainPokemon(p),
-                          onOpenInventory: () => _openInventorySheet(penList),
-                        )
-                      : _buildInventoryGrid(penList)),
+                  : _RoamingParkView(
+                      penList: penList,
+                      onTrain: _trainPokemon,
+                    ),
             ),
           ],
         );
@@ -85,7 +77,7 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
           ),
           // Clickable X/20 SLOTS badge
           GestureDetector(
-            onTap: () => _openInventorySheet(penList),
+            onTap: _openInventorySheet,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
               decoration: BoxDecoration(
@@ -108,43 +100,7 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
     );
   }
 
-  Widget _buildModeBar(List<CaughtPokemon> penList) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _isParkView ? 'Pokémon roam freely! Hold +25 to spam train.' : 'Inventory Grid: Hold to train or release.',
-                style: GoogleFonts.inter(color: Colors.white70, fontSize: 11),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            GestureDetector(
-              onTap: () => setState(() => _isParkView = !_isParkView),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4FC3F7).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(_isParkView ? 'GRID' : 'PARK',
-                    style: GoogleFonts.inter(color: const Color(0xFF4FC3F7), fontSize: 10, fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openInventorySheet(List<CaughtPokemon> penList) {
+  void _openInventorySheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -199,28 +155,6 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
               ),
             );
           },
-        );
-      },
-    );
-  }
-
-  Widget _buildInventoryGrid(List<CaughtPokemon> penList) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.84,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: penList.length,
-      itemBuilder: (context, i) {
-        final p = penList[i];
-        return _SafariCard(
-          pokemon: p,
-          color: typeColor(p.types.firstOrNull ?? 'normal'),
-          onTrain: () => _trainPokemon(p),
-          onRelease: () => _confirmRelease(p),
         );
       },
     );
@@ -319,15 +253,11 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
 // ── ROAMING PARK MEADOW VIEW ──────────────────────────────────────────────────
 class _RoamingParkView extends StatefulWidget {
   final List<CaughtPokemon> penList;
-  final Color Function(String) typeColor;
   final ValueChanged<CaughtPokemon> onTrain;
-  final VoidCallback onOpenInventory;
 
   const _RoamingParkView({
     required this.penList,
-    required this.typeColor,
     required this.onTrain,
-    required this.onOpenInventory,
   });
 
   @override
@@ -490,9 +420,10 @@ class _FloatingTrainBubble extends StatelessWidget {
           // HOLD TO SPAM TRAIN BUTTON!
           HoldToSpamButton(
             onTrigger: onTrain,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFF7C4DFF)]),
-              borderRadius: BorderRadius.circular(8),
+            neoPopDecoration: const NeoPopTiltedButtonDecoration(
+              color: Color(0xFF00C853),
+              plunkColor: Color(0xFF087F23),
+              shadowColor: Color(0x5500E676),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             child: Row(
@@ -560,7 +491,11 @@ class _InventoryTile extends StatelessWidget {
           // HOLD TO SPAM TRAIN!
           HoldToSpamButton(
             onTrigger: onTrain,
-            decoration: BoxDecoration(color: const Color(0xFF6C5CE7), borderRadius: BorderRadius.circular(6)),
+            neoPopDecoration: const NeoPopTiltedButtonDecoration(
+              color: Color(0xFF00C853),
+              plunkColor: Color(0xFF087F23),
+              shadowColor: Color(0x5500E676),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -571,81 +506,6 @@ class _InventoryTile extends StatelessWidget {
             ),
           ),
           IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: Colors.white38), onPressed: onRelease),
-        ],
-      ),
-    );
-  }
-}
-
-// ── GRID CARD (WITH HOLD TO SPAM) ─────────────────────────────────────────────
-class _SafariCard extends StatelessWidget {
-  final CaughtPokemon pokemon;
-  final Color color;
-  final VoidCallback onTrain;
-  final VoidCallback onRelease;
-
-  const _SafariCard({
-    required this.pokemon,
-    required this.color,
-    required this.onTrain,
-    required this.onRelease,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E34),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('Lv.${pokemon.level}', style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 7.5)),
-              const Spacer(),
-              GestureDetector(onTap: onRelease, child: const Icon(Icons.delete_outline, size: 14, color: Colors.white38)),
-            ],
-          ),
-          Expanded(
-            child: Center(
-              child: CachedNetworkImage(
-                imageUrl: pokemon.spriteUrl,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const ShimmerBox(size: 50),
-              ),
-            ),
-          ),
-          Text(pokemon.displayName,
-              style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 2),
-          LinearProgressIndicator(value: pokemon.xpProgress, minHeight: 4, backgroundColor: Colors.white12,
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF4FC3F7))),
-          Text('${pokemon.xp}/${pokemon.xpForNextLevel} XP', style: GoogleFonts.inter(color: Colors.white38, fontSize: 8.5)),
-          const SizedBox(height: 6),
-          // HOLD TO SPAM TRAIN!
-          HoldToSpamButton(
-            onTrigger: onTrain,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF6C5CE7), Color(0xFF7C4DFF)]),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.flash_on, size: 10, color: Colors.white),
-                  const SizedBox(width: 2),
-                  Text('HOLD +25', style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 6.5)),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );

@@ -6,7 +6,7 @@ A retro-styled Pokémon companion mobile application developed with Flutter. It 
 
 ## Demo App
 
-Run the app locally with `flutter pub get` followed by `flutter run`. No hosted demo or recording is currently included in this repository.
+Download the [Android ARM64 APK](releases/pokepoke-android-arm64.apk) to install the app, or run it locally with `flutter pub get` followed by `flutter run`. No demo recording is currently included in this repository.
 
 ---
 
@@ -63,6 +63,8 @@ pokepoke/
 │   │   └── safari_bgm.mp3               # 8-bit retro chiptune background music (Kevin MacLeod)
 │   └── images/
 │       └── pokeball.svg                 # Vector asset used for status indicators and watermark backgrounds
+├── releases/
+│   └── pokepoke-android-arm64.apk       # Installable Android ARM64 release build
 ├── lib/
 │   ├── main.dart                        # Application bootstrap, orientation locking
 │   ├── core/
@@ -146,7 +148,7 @@ pokepoke/
 - Tapping any roaming Pokémon in the meadow reveals a quick training popover.
 - **Quick Inventory Sheet**: Clicking the **"X / 20 SLOTS"** badge opens a modal bottom sheet listing all caught Pokémon.
 - Trainers can train (+25 XP) to level up and trigger auto-evolution celebrations once level requirements are met, or release Pokémon back into the wild to free up pen slots.
-- Includes view switching between Roaming Park view and Grid Inventory view, with background music control.
+- Tap the slots indicator to open inventory for training or releasing Pokémon; the main view is the roaming meadow.
 
 ### 7. API Integration (shared across screens)
 - The Pokédex uses `GET /pokemon/{name_or_id}` for online search and ID-based loading.

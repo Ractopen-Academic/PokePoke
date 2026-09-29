@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:neopop/neopop.dart';
 
 /// A button that executes [onTrigger] on tap, and continuously spams [onTrigger]
 /// at a rapid [interval] while being held down!
@@ -10,6 +11,7 @@ class HoldToSpamButton extends StatefulWidget {
   final Duration initialDelay;
   final Duration interval;
   final BoxDecoration? decoration;
+  final NeoPopTiltedButtonDecoration? neoPopDecoration;
   final EdgeInsetsGeometry padding;
   final double pressedScale;
 
@@ -20,6 +22,7 @@ class HoldToSpamButton extends StatefulWidget {
     this.initialDelay = const Duration(milliseconds: 250),
     this.interval = const Duration(milliseconds: 90),
     this.decoration,
+    this.neoPopDecoration,
     this.padding = EdgeInsets.zero,
     this.pressedScale = 0.94,
   });
@@ -69,6 +72,24 @@ class _HoldToSpamButtonState extends State<HoldToSpamButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.neoPopDecoration case final neoPopDecoration?) {
+      return Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (_) => _startSpam(),
+        onPointerUp: (_) => _stopSpam(),
+        onPointerCancel: (_) => _stopSpam(),
+        child: NeoPopTiltedButton(
+          isFloating: true,
+          decoration: neoPopDecoration,
+          onTapUp: _stopSpam,
+          child: Padding(
+            padding: widget.padding,
+            child: widget.child,
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTapDown: (_) => _startSpam(),
       onTapUp: (_) => _stopSpam(),
