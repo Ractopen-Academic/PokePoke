@@ -1,27 +1,12 @@
 # PokéPoke
 
-A retro-styled Pokémon companion mobile application developed with Flutter. It integrates NeoPoP brutalist design principles with real-time PokéAPI synchronization, height-proportional sprite sizing, interactive multi-stage evolution trees, and offline-first local persistence.
+A retro-styled Pokémon companion mobile application developed with Flutter. It combines NeoPoP-inspired design, PokéAPI lookups, height-proportional sprite sizing, interactive evolution trees, and offline-first local persistence.
 
 ---
 
 ## Demo App
 
-```
-+------------------------------------------------------------------------+
-|                                                                        |
-|                       DEMO VIDEO RECORDING                             |
-|                                                                        |
-|                   [ Video Placeholder: demo.mp4 ]                      |
-|                                                                        |
-|   Features Demonstrated:                                               |
-|   - Splash screen with competitive trainer tips                        |
-|   - Height-proportional Pokédex grid with real-time type filtering     |
-|   - Wide evolution sheet with stage switching                          |
-|   - Name and Pokédex ID search with PokéAPI online fallback            |
-|   - Persistent favourites management with live badge updates           |
-|                                                                        |
-+------------------------------------------------------------------------+
-```
+Run the app locally with `flutter pub get` followed by `flutter run`. No hosted demo or recording is currently included in this repository.
 
 ---
 
@@ -37,7 +22,7 @@ A retro-styled Pokémon companion mobile application developed with Flutter. It 
 - **Roaming Safari Meadow Sanctuary (Profile Tab)**: Caught Pokémon actively roam, wander, and spread out across an animated 2D meadow habitat. Tapping any roaming Pokémon brings up a quick training popover.
 - **Quick Safari Inventory Modal**: Clicking the "X / 20 SLOTS" badge opens an inventory sheet to review all caught Pokémon, grant +25 XP to level up / auto-evolve, or release unwanted Pokémon.
 - **8-Bit Retro Chiptune Background Music**: Implements looping authentic 8-bit background audio (*"8bit Dungeon Boss"* by Kevin MacLeod) with an interactive sound toggle.
-- **Offline Reliability**: Bundles a verified initial seed dataset and instant evolution mappings to ensure zero-latency initial rendering.
+- **Offline Reliability**: Bundles a 20-entry seed dataset and built-in evolution chains, with persistent caches for previously loaded Pokémon and evolution data.
 
 ---
 
@@ -53,31 +38,19 @@ A retro-styled Pokémon companion mobile application developed with Flutter. It 
 | **AudioPlayers** | ![AudioPlayers](https://img.shields.io/badge/AudioPlayers-FF9800?style=flat&logo=media&logoColor=white) | Looping 8-bit background music playback |
 | **Pedometer & Sensors** | ![Pedometer](https://img.shields.io/badge/Pedometer-00E676?style=flat&logo=android&logoColor=white) | Real-world physical step tracking |
 | **SharedPreferences** | ![SharedPreferences](https://img.shields.io/badge/Shared_Preferences-4CAF50?style=flat&logo=sqlite&logoColor=white) | Key-value local storage |
-| **HTTP Networking** | ![HTTP](https://img.shields.io/badge/HTTP-009688?style=flat&logo=apache-http-server&logoColor=white) | Network communication and connectivity checks |
+| **Dio & Connectivity Plus** | ![Dio](https://img.shields.io/badge/Dio-009688?style=flat&logo=dio&logoColor=white) | PokéAPI requests and network availability checks |
+| **Cached Network Image** | ![Cached Network Image](https://img.shields.io/badge/Cached_Network_Image-5C6BC0?style=flat&logo=flutter&logoColor=white) | Artwork loading and image caching |
+| **Flutter Animate & SVG** | ![Flutter Animate](https://img.shields.io/badge/Flutter_Animate-7E57C2?style=flat&logo=flutter&logoColor=white) | UI animations and vector assets |
 
 ---
 
 ## API Endpoints
 
-1. **Fetch Pokémon by Name or Pokédex ID:**
-   - **Endpoint:** `GET https://pokeapi.co/api/v2/pokemon/{name_or_id}`
-   - **File:** `pokemon_service.dart:129`
-   - **Usage:** Used in `fetchSinglePokemon` (for search & evolution details) and `fetchMore` (batching 10 Pokémon at a time by sequential ID).
+1. **Pokémon data:** `GET https://pokeapi.co/api/v2/pokemon/{name_or_id}`. Used for online search and to fetch Pokémon by ID during pagination and background refresh.
+2. **Species and evolution discovery:** `GET https://pokeapi.co/api/v2/pokemon-species/{id}`. The response provides an `evolution_chain.url`; the app follows it to `GET https://pokeapi.co/api/v2/evolution-chain/{id}/` to retrieve the evolution details.
+3. **Official artwork:** `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{id}.png`. Artwork is loaded by `CachedNetworkImage`; this is a sprite URL, not a PokéAPI REST endpoint.
 
-2. **Fetch Pokémon Species Data (Evolution Chain Discovery):**
-   - **Endpoint:** `GET https://pokeapi.co/api/v2/pokemon-species/{id}`
-   - **File:** `evolution_service.dart:204`
-   - **Usage:** Retrieves the species details to find the specific `evolution_chain` resource URL for that Pokémon.
-
-3. **Fetch Evolution Chain Structure:**
-   - **Endpoint:** `GET https://pokeapi.co/api/v2/evolution-chain/{id}/`
-   - **File:** `evolution_service.dart:214`
-   - **Usage:** Parses evolution nodes, evolution triggers (Level, Stone, Trade, Friendship), and species sequence.
-
-4. **Official High-Res Artwork (Sprite CDN):**
-   - **URL:** `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{id}.png`
-   - **Files:** `pokemon_service.dart:46`, `evolution_service.dart:18`
-   - **Usage:** High-resolution official Pokémon artwork cached to disk via `CachedNetworkImage`.
+PokéAPI requests are made with Dio and do not require an API key. Network access is needed for online search and uncached data; bundled seed data, cached Pokémon, and built-in evolution chains support offline use.
 
 ---
 
@@ -95,16 +68,21 @@ pokepoke/
 │   ├── core/
 │   │   ├── data/
 │   │   │   ├── pokemon_seed.dart        # Verified offline starter dataset
-│   │   │   └── pokemon_species_data.dart# Physical dimensions, lore descriptions, and combat abilities
+│   │   │   └── pokemon_species_data.dart # Physical dimensions, lore descriptions, and combat abilities
+│   │   ├── utils/
+│   │   │   └── type_colors.dart          # Shared Pokémon type colors
 │   │   ├── services/
 │   │   │   ├── audio_service.dart       # Looping 8-bit background music service and mute controller
 │   │   │   ├── cache_service.dart       # Local persistence and TTL cache manager
 │   │   │   ├── evolution_service.dart   # Offline and network evolution chain resolver
 │   │   │   ├── favourite_service.dart   # Reactive favourite state notifier and storage
+│   │   │   ├── poke_api_client.dart     # Shared Dio client and request timeouts
 │   │   │   └── pokemon_service.dart     # PokéAPI client and height-based sprite scaling
 │   │   └── widgets/
 │   │       ├── hold_to_spam_button.dart # Reusable auto-fire hold-to-spam button
 │   │       ├── loadingscreen.dart       # Splash screen with competitive trainer tips
+│   │       ├── poke_dark_dialog.dart    # Shared dark dialog styling
+│   │       ├── shimmer_box.dart         # Shared image-loading placeholder
 │   │       └── loading_screen/
 │   │           └── loading_screen.dart  # Continuous spinning vector indicator
 │   └── features/
@@ -123,7 +101,7 @@ pokepoke/
 │           └── profile/
 │               └── profile_safari_screen.dart # Roaming Safari Meadow, inventory sheet & training interface
 ├── test/
-│   ├── widget_test.dart                 # Size scaling boundary and calculation tests
+│   ├── widget_test.dart                 # API parsing and size scaling tests
 │   ├── favourite_test.dart              # Favourites service and persistence tests
 │   ├── battle_pen_test.dart             # Safari Pen capacity, XP, and auto-evolution tests
 │   ├── hold_to_spam_test.dart           # Hold-to-spam rapid triggering tests
@@ -170,16 +148,22 @@ pokepoke/
 - Trainers can train (+25 XP) to level up and trigger auto-evolution celebrations once level requirements are met, or release Pokémon back into the wild to free up pen slots.
 - Includes view switching between Roaming Park view and Grid Inventory view, with background music control.
 
+### 7. API Integration (shared across screens)
+- The Pokédex uses `GET /pokemon/{name_or_id}` for online search and ID-based loading.
+- Evolution details use `GET /pokemon-species/{id}`, then follow the evolution-chain URL returned by that response.
+- Pokémon artwork is loaded from the PokéAPI sprites repository and cached by `CachedNetworkImage`.
+- Offline seed data, persistent local cache, and built-in evolution chains provide fallback data when the API is unavailable.
+
 ---
 
 ## Team & Commit Distribution
 
-| Contributor | GitHub Profile | Commits |
+| Contributor | GitHub Profile | Contribution Share |
 |:---|:---|:---:|
-| **Ractopen** | [ractopen](https://github.com/ractopen) | 11 |
-| **Kent John** | [kentjohnllanita8978-oss](https://github.com/kentjohnllanita8978-oss) | 4 |
-| **Roma** | [RomamasMPapas](https://github.com/RomamasMPapas) | 4 |
-| **Jehlia** | [Jehlia-newcoder](https://github.com/Jehlia-newcoder) | 3 |
+| **Ractopen** | [ractopen](https://github.com/ractopen) | 60% |
+| **Kent John** | [kentjohnllanita8978-oss](https://github.com/kentjohnllanita8978-oss) | 20% |
+| **Roma** | [RomamasMPapas](https://github.com/RomamasMPapas) | 10% |
+| **Jehlia** | [Jehlia-newcoder](https://github.com/Jehlia-newcoder) | 10% |
 
 ---
 

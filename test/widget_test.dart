@@ -1,7 +1,66 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pokepoke/core/data/pokemon_species_data.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 
 void main() {
+  group('PokemonEntry API parsing', () {
+    test('reads API fields and falls back to species dimensions', () {
+      final pokemon = PokemonEntry.fromApi({
+        'id': 1,
+        'name': 'bulbasaur',
+        'types': [
+          {
+            'type': {'name': 'grass'},
+          },
+          {
+            'type': {'name': 'poison'},
+          },
+        ],
+      });
+
+      expect(pokemon.types, ['grass', 'poison']);
+      expect(pokemon.height, 7);
+      expect(pokemon.weight, 69);
+    });
+
+    test('uses dimensions returned by the API', () {
+      final pokemon = PokemonEntry.fromApi({
+        'id': 1,
+        'name': 'bulbasaur',
+        'types': [
+          {
+            'type': {'name': 'grass'},
+          },
+        ],
+        'height': 8,
+        'weight': 75,
+      });
+
+      expect(pokemon.height, 8);
+      expect(pokemon.weight, 75);
+    });
+
+    test('does not invent measurements for unknown offline species', () {
+      final pokemon = PokemonEntry.fromApi({
+        'id': 999,
+        'name': 'unknown',
+        'types': [
+          {
+            'type': {'name': 'normal'},
+          },
+        ],
+      });
+      final species = getSpeciesData(pokemon.id);
+
+      expect(pokemon.height, 0);
+      expect(pokemon.weight, 0);
+      expect(pokemon.formattedHeight, '—');
+      expect(pokemon.formattedWeight, '—');
+      expect(species.abilities, isEmpty);
+      expect(species.weaknesses, isEmpty);
+    });
+  });
+
   group('PokemonEntry Size Scaling', () {
     test('Bulbasaur scales smaller than Venusaur', () {
       final bulbasaur = PokemonEntry(
@@ -49,4 +108,3 @@ void main() {
     });
   });
 }
-

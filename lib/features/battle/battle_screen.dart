@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:pokepoke/core/services/audio_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 import 'package:pokepoke/core/widgets/hold_to_spam_button.dart';
+import 'package:pokepoke/core/widgets/poke_dark_dialog.dart';
 import 'package:pokepoke/features/battle/data/battle_pen_service.dart';
 import 'package:pokepoke/features/battle/data/caught_pokemon.dart';
 
@@ -87,12 +88,8 @@ class _BattleScreenState extends State<BattleScreen> {
 
     final granted = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C30),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF00E676)),
-        ),
+      builder: (ctx) => PokeDarkDialog(
+        borderColor: const Color(0xFF00E676),
         title: Text(
           'PEDOMETER ACCESS',
           style: GoogleFonts.pressStart2p(color: const Color(0xFF00E676), fontSize: 11),
@@ -223,9 +220,8 @@ class _BattleScreenState extends State<BattleScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => PokeDarkDialog(
         backgroundColor: const Color(0xFF1E1E34),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('PEN FULL (20/20)', style: GoogleFonts.pressStart2p(color: Colors.redAccent, fontSize: 11)),
         content: Text('Your Safari Pen is at max capacity! Release some Pokémon to catch ${mon.displayName}.',
             style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
@@ -242,12 +238,10 @@ class _BattleScreenState extends State<BattleScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C30),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFFFCC00), width: 1.5),
-        ),
+      builder: (ctx) => PokeDarkDialog(
+        radius: 20,
+        borderColor: const Color(0xFFFFCC00),
+        borderWidth: 1.5,
         title: Row(
           children: [
             const Icon(Icons.catching_pokemon, color: Color(0xFFFFCC00), size: 22),

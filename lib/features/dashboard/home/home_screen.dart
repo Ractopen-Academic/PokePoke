@@ -702,104 +702,36 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildBottomNav() {
     return ValueListenableBuilder<Set<int>>(
       valueListenable: FavouriteService.favouritesNotifier,
-      builder: (context, favs, _) {
-        final items = [
-          (Icons.catching_pokemon, 'Pokédex', 0),
-          (Icons.favorite_border, 'Favourites', favs.length),
-          (Icons.sports_kabaddi, 'Battle', 0),
-          (Icons.person_outline, 'Profile', 0),
-        ];
-
-        return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF16213E),
-            border: Border(top: BorderSide(color: Colors.white10)),
+      builder: (context, favs, _) => NavigationBar(
+        height: 68,
+        backgroundColor: const Color(0xFF16213E),
+        indicatorColor: const Color(0x26FF1C1C),
+        selectedIndex: _navIndex,
+        onDestinationSelected: (index) => setState(() => _navIndex = index),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.catching_pokemon),
+            label: 'Pokédex',
           ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(items.length, (i) {
-                  final (icon, label, badgeCount) = items[i];
-                  final active = _navIndex == i;
-                  return GestureDetector(
-                    onTap: () => setState(() => _navIndex = i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: active
-                            ? const Color(0xFFFF1C1C).withValues(alpha: 0.15)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Icon(
-                                icon,
-                                color: active
-                                    ? const Color(0xFFFF1C1C)
-                                    : Colors.white38,
-                                size: 22,
-                              ),
-                              if (badgeCount > 0)
-                                Positioned(
-                                  top: -4,
-                                  right: -8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 4, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFF3B56),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 14,
-                                      minHeight: 14,
-                                    ),
-                                    child: Text(
-                                      '$badgeCount',
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            label,
-                            style: GoogleFonts.inter(
-                              color: active
-                                  ? const Color(0xFFFF1C1C)
-                                  : Colors.white38,
-                              fontSize: 10,
-                              fontWeight: active
-                                  ? FontWeight.w700
-                                  : FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ),
+          NavigationDestination(
+            icon: Badge.count(
+              count: favs.length,
+              isLabelVisible: favs.isNotEmpty,
+              child: const Icon(Icons.favorite_border),
             ),
+            label: 'Favourites',
           ),
-        );
-      },
+          const NavigationDestination(
+            icon: Icon(Icons.sports_kabaddi),
+            label: 'Battle',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            label: 'Profile',
+          ),
+        ],
+      ),
     );
   }
 }

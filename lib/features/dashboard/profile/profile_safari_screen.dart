@@ -6,6 +6,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pokepoke/core/services/audio_service.dart';
 import 'package:pokepoke/core/utils/type_colors.dart';
+import 'package:pokepoke/core/widgets/poke_dark_dialog.dart';
 import 'package:pokepoke/core/widgets/hold_to_spam_button.dart';
 import 'package:pokepoke/core/widgets/shimmer_box.dart';
 import 'package:pokepoke/features/battle/data/battle_pen_service.dart';
@@ -245,12 +246,10 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
   void _showEvolutionDialog(EvolutionResult r) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C30),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFFFCC00), width: 1.5),
-        ),
+      builder: (ctx) => PokeDarkDialog(
+        radius: 20,
+        borderColor: const Color(0xFFFFCC00),
+        borderWidth: 1.5,
         title: Text('EVOLUTION!', style: GoogleFonts.pressStart2p(color: const Color(0xFFFFCC00), fontSize: 13)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -277,9 +276,7 @@ class _ProfileSafariScreenState extends State<ProfileSafariScreen> {
   void _confirmRelease(CaughtPokemon p) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C30),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      builder: (ctx) => PokeDarkDialog(
         title: Text('Release ${p.displayName}?', style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 11)),
         content: Text('Release ${p.displayName} (Lv. ${p.level}) to free up 1 slot?',
             style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
