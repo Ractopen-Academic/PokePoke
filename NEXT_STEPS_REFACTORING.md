@@ -1,75 +1,52 @@
-# 🚀 PokéPoke — Refactoring & Code Simplification Roadmap
+# PokéPoke: Code Simplification Handoff
 
-> **For the Next AI Model / Assistant**:
-> This document details the exact status, achievements, and pending tasks for simplifying and reducing boilerplate in the **PokéPoke** Flutter project.
-> **Git author requirement**: `ractopen <197402134+ractopen@users.noreply.github.com>`.
-> **Working Directory**: `/home/ryme/Personal/School/Mobile Programming/Midterm/pokepoke`
+This is a handoff for continuing the code-size cleanup. Prioritize fewer lines while preserving the current UI, offline behavior, and gameplay. Do not add a package unless it reduces project-maintained code without replacing important behavior with a more complicated setup.
 
----
+## Current repository state
 
-## 📊 Summary of What Was Accomplished So Far
+The following changes are present in the repository:
 
-In the initial cleanup pass, we eliminated boilerplate across UI animations and services:
-1. **Consolidated Animation Libraries**:
-   - Removed redundant `animate_do` package in favor of `flutter_animate`.
-   - Converted all `FadeInDown`, `FadeInUp`, and `FadeInLeft` calls to `.animate().fadeIn().slideY()/slideX()`.
-   - Removed manual `AnimationController` + `Tween` in `_PokemonCard` in favor of Flutter's clean `AnimatedScale`.
-2. **De-duplicated UI & Styling**:
-   - Created `lib/core/utils/type_colors.dart` (`kTypeColors` map & `typeColor()` helper), replacing 4 copy-pasted implementations across screens.
-   - Created `lib/core/widgets/shimmer_box.dart` (`ShimmerBox`), eliminating duplicate inline `Shimmer.fromColors` placeholders.
-3. **Migrated HTTP to Dio**:
-   - Replaced raw `http` and manual `dart:convert` in `pokemon_service.dart` and `evolution_service.dart` with `dio: ^5.8.0`.
-   - Automatic JSON decoding and exception-based error handling.
-4. **Current Status**:
-   - `flutter analyze` passing with **0 issues**.
-   - `flutter test` passing with **13/13 tests passing**.
+- `animate_do` has been removed; screens use the already-installed `flutter_animate`.
+- `PokemonService` and `EvolutionService` use Dio for PokeAPI requests.
+- Shared Pokémon type colors live in `lib/core/utils/type_colors.dart`.
+- Shared image loading shimmer UI lives in `lib/core/widgets/shimmer_box.dart`.
+- The Pokémon card press animation uses Flutter's `AnimatedScale`.
 
----
+This document does not claim a line-count reduction or test status. The worktree was clean before this handoff was edited, so the earlier conversation's claimed savings cannot be independently measured from an available diff. Run `flutter analyze` and `flutter test` after any code changes.
 
-## 🎯 Next Steps: Remaining Tasks to Save Lines of Code
+## Recommended next steps
 
-### Priority 1: Replace Manual CacheService with `dio_cache_interceptor`
-- **Target Files**: `lib/core/services/cache_service.dart`, `lib/core/services/pokemon_service.dart`, `lib/core/services/evolution_service.dart`
-- **Potential Lines Saved**: **~90–120 lines**
-- **Action**:
-  1. Add `dio_cache_interceptor` and `dio_cache_interceptor_hive_store` (or memory store).
-  2. Attach the cache interceptor to the shared `_dio` instance in `PokemonService`.
-  3. Remove manual cache staleness, timestamps, and json encoding in `cache_service.dart`.
+### 1. Remove duplicated PokeAPI-to-model mapping
 
-### Priority 2: Extract Reusable `PokeDarkDialog`
-- **Target Files**: `lib/features/battle/battle_screen.dart`, `lib/features/dashboard/profile/profile_safari_screen.dart`
-- **Potential Lines Saved**: **~60 lines**
-- **Action**:
-  - Multiple `AlertDialog` instances share almost identical dark-theme container decorations, rounded borders (`Color(0xFF262640)`), title styling (`GoogleFonts.pressStart2p`), and action button setups.
-  - Create `lib/core/widgets/poke_dark_dialog.dart` with a simple title, content, and positive/negative actions.
+**Files:** `lib/core/services/pokemon_service.dart`
 
-### Priority 3: Simplify Bottom Navigation in `HomeScreen`
-- **Target File**: `lib/features/dashboard/home/home_screen.dart` (`_buildBottomNav()`)
-- **Potential Lines Saved**: **~60–75 lines**
-- **Action**:
-  - Replace the ~90-line custom `Container` + `Row` + `GestureDetector` + badge calculation with Flutter's standard `NavigationBar` or `BottomNavigationBar` using `NavigationDestination` and `Badge.count`.
+`fetchSinglePokemon`, `fetchMore`, and `_fetchFirstPage` each read the API response and build a `PokemonEntry` in similar code. Consider extracting a single private mapper (or a `PokemonEntry` API factory) that handles the API's nested `types` shape and species height/weight fallback. Reuse it in all three paths. Keep `fromMap` for the app's existing cache shape; confirm whether that shape matches the API before trying to combine them.
 
-### Priority 4: Code Generation for Models (`json_serializable` or `freezed`)
-- **Target Files**:
-  - `lib/features/battle/data/caught_pokemon.dart`
-  - `lib/core/services/pokemon_service.dart` (`PokemonEntry`)
-  - `lib/core/services/evolution_service.dart` (`EvolutionNode`, `EvolutionChainData`)
-- **Potential Lines Saved**: **~80–120 lines**
-- **Action**:
-  - Add `json_serializable` and `build_runner` to `dev_dependencies` and `json_annotation` to `dependencies`.
-  - Replace hand-written `toMap()` and `fromMap()` methods.
+**Acceptance:** all three fetch paths return equivalent entries, including correct types, height, and weight; existing cache behavior is unchanged.
 
-### Priority 5: Architectural State Management & Routing (Optional / Post-Midterm)
-- **State**: Replace `ValueNotifier` instances (`penNotifier`, `favouritesNotifier`, audio notifiers) with `flutter_riverpod`.
-- **Navigation**: Replace manual tab switching with `go_router` shell routes.
-- **Estimated Savings**: **~200–300 lines**.
+### 2. Consolidate repeated dialog styling where it genuinely matches
 
----
+**Files:** `lib/features/battle/battle_screen.dart`, `lib/features/dashboard/profile/profile_safari_screen.dart`; consider a shared widget under `lib/core/widgets/`.
 
-## 🛠️ Important Commands for the Assistant
-- Run tests: `flutter test`
-- Analyze linter & syntax: `flutter analyze`
-- Git commit (use author):
-  ```bash
-  git commit --author="ractopen <197402134+ractopen@users.noreply.github.com>" -m "..."
-  ```
+There are multiple `AlertDialog` implementations with repeated dark styling. Compare their actions, colors, and dismissal behavior before extracting a small shared dialog widget. Keep dialogs with materially different behavior separate; a reusable component should reduce call-site code, not add configuration boilerplate.
+
+**Acceptance:** actions, barrier behavior, text, and styling stay the same.
+
+### 3. Evaluate standard bottom navigation
+
+**File:** `lib/features/dashboard/home/home_screen.dart` (`_buildBottomNav`)
+
+Check whether Flutter's `NavigationBar`/`NavigationDestination` can replace the custom bottom navigation while retaining the current appearance, selection behavior, and badges. This is optional: do not adopt it if matching the current UI requires substantial custom styling or more code.
+
+### 4. Treat persistence and code-generation packages as investigations, not drop-in replacements
+
+- `lib/core/services/cache_service.dart` is more than HTTP response caching: it seeds offline Pokémon data, stores the list and per-Pokémon evolution chains, upserts fetched entries, and tracks a refresh TTL. A Dio cache interceptor does not automatically replace these app-specific features. Only consider one if it clearly simplifies the overall design while preserving offline behavior and persistence.
+- `CaughtPokemon`, `PokemonEntry`, `EvolutionNode`, and `EvolutionChainData` have hand-written map serialization. `json_serializable` or `freezed` may reduce handwritten model code, but generated files and build-runner workflow add overhead. Compare total maintained code and migration risk before adopting them.
+- Riverpod and GoRouter are architectural migrations, not quick line-count reductions. Defer unless there is a separate need to change state management or navigation.
+
+## Useful commands
+
+```sh
+flutter analyze
+flutter test
+```
