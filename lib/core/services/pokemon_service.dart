@@ -1,8 +1,7 @@
-import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:http/http.dart' as http;
 import 'package:pokepoke/core/data/pokemon_species_data.dart';
 import 'package:pokepoke/core/services/cache_service.dart';
+import 'package:pokepoke/core/services/poke_api_client.dart';
 
 class PokemonEntry {
   final int id;
@@ -23,8 +22,10 @@ class PokemonEntry {
   String get displayName =>
       name[0].toUpperCase() + name.substring(1).replaceAll('-', ' ');
 
-  String get formattedHeight => '${(height / 10).toStringAsFixed(1)} m';
-  String get formattedWeight => '${(weight / 10).toStringAsFixed(1)} kg';
+  String get formattedHeight =>
+      height > 0 ? '${(height / 10).toStringAsFixed(1)} m' : '—';
+  String get formattedWeight =>
+      weight > 0 ? '${(weight / 10).toStringAsFixed(1)} kg' : '—';
 
   /// Responsive sprite sizing:
   /// Small Pokémon (e.g. Caterpie, Sandshrew, Bulbasaur) scale around 72-78px,
@@ -48,15 +49,21 @@ class PokemonEntry {
 
   factory PokemonEntry.fromMap(Map<String, dynamic> m) {
     final id = m['id'] as int;
-    final species = getSpeciesData(id);
     final rawH = (m['height'] as num?)?.toInt();
     final rawW = (m['weight'] as num?)?.toInt();
+    final species = getSpeciesData(
+      id,
+      fallbackHeight: rawH,
+      fallbackWeight: rawW,
+    );
 
     // Auto-heal old cached entries where height was defaulted to 10
-    final resolvedHeight = (rawH != null && (rawH != 10 || species.height == 10))
+    final resolvedHeight =
+        (rawH != null && (rawH != 10 || species.height == 10))
         ? rawH
         : species.height;
-    final resolvedWeight = (rawW != null && (rawW != 100 || species.weight == 100))
+    final resolvedWeight =
+        (rawW != null && (rawW != 100 || species.weight == 100))
         ? rawW
         : species.weight;
 
@@ -69,28 +76,98 @@ class PokemonEntry {
     );
   }
 
+  factory PokemonEntry.fromApi(Map<String, dynamic> data) {
+    final id = data['id'] as int;
+    final height = (data['height'] as num?)?.toInt();
+    final weight = (data['weight'] as num?)?.toInt();
+    final species = getSpeciesData(id);
+    return PokemonEntry(
+      id: id,
+      name: data['name'] as String,
+      types: (data['types'] as List)
+          .map((type) => type['type']['name'] as String)
+          .toList(),
+      height: height ?? species.height,
+      weight: weight ?? species.weight,
+    );
+  }
+
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'types': types,
-        'height': height,
-        'weight': weight,
-      };
+    'id': id,
+    'name': name,
+    'types': types,
+    'height': height,
+    'weight': weight,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Hardcoded Pokémon #1–9 (verified via PokeAPI curl, always available offline)
 // ---------------------------------------------------------------------------
 final List<PokemonEntry> kBuiltInPokemon = [
-  PokemonEntry(id: 1, name: 'bulbasaur',  types: ['grass', 'poison'], height: 7,  weight: 69),
-  PokemonEntry(id: 2, name: 'ivysaur',    types: ['grass', 'poison'], height: 10, weight: 130),
-  PokemonEntry(id: 3, name: 'venusaur',   types: ['grass', 'poison'], height: 20, weight: 1000),
-  PokemonEntry(id: 4, name: 'charmander', types: ['fire'],            height: 6,  weight: 85),
-  PokemonEntry(id: 5, name: 'charmeleon', types: ['fire'],            height: 11, weight: 190),
-  PokemonEntry(id: 6, name: 'charizard',  types: ['fire', 'flying'],  height: 17, weight: 905),
-  PokemonEntry(id: 7, name: 'squirtle',   types: ['water'],           height: 5,  weight: 90),
-  PokemonEntry(id: 8, name: 'wartortle',  types: ['water'],           height: 10, weight: 225),
-  PokemonEntry(id: 9, name: 'blastoise',  types: ['water'],           height: 16, weight: 855),
+  PokemonEntry(
+    id: 1,
+    name: 'bulbasaur',
+    types: ['grass', 'poison'],
+    height: 7,
+    weight: 69,
+  ),
+  PokemonEntry(
+    id: 2,
+    name: 'ivysaur',
+    types: ['grass', 'poison'],
+    height: 10,
+    weight: 130,
+  ),
+  PokemonEntry(
+    id: 3,
+    name: 'venusaur',
+    types: ['grass', 'poison'],
+    height: 20,
+    weight: 1000,
+  ),
+  PokemonEntry(
+    id: 4,
+    name: 'charmander',
+    types: ['fire'],
+    height: 6,
+    weight: 85,
+  ),
+  PokemonEntry(
+    id: 5,
+    name: 'charmeleon',
+    types: ['fire'],
+    height: 11,
+    weight: 190,
+  ),
+  PokemonEntry(
+    id: 6,
+    name: 'charizard',
+    types: ['fire', 'flying'],
+    height: 17,
+    weight: 905,
+  ),
+  PokemonEntry(
+    id: 7,
+    name: 'squirtle',
+    types: ['water'],
+    height: 5,
+    weight: 90,
+  ),
+  PokemonEntry(
+    id: 8,
+    name: 'wartortle',
+    types: ['water'],
+    height: 10,
+    weight: 225,
+  ),
+  PokemonEntry(
+    id: 9,
+    name: 'blastoise',
+    types: ['water'],
+    height: 16,
+    weight: 855,
+  ),
 ];
 
 class PokemonService {
@@ -125,64 +202,35 @@ class PokemonService {
     if (clean.isEmpty) return null;
 
     try {
-      final res = await http.get(
-        Uri.parse('https://pokeapi.co/api/v2/pokemon/$clean'),
-        headers: {'User-Agent': 'PokePoke-App'},
-      ).timeout(const Duration(seconds: 8));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final id = data['id'] as int;
-        final types = (data['types'] as List)
-            .map((t) => t['type']['name'] as String)
-            .toList();
-        final species = getSpeciesData(id);
-        final height = (data['height'] as num?)?.toInt() ?? species.height;
-        final weight = (data['weight'] as num?)?.toInt() ?? species.weight;
-
-        return PokemonEntry(
-          id: id,
-          name: data['name'] as String,
-          types: types,
-          height: height,
-          weight: weight,
-        );
-      }
+      final res = await pokeApiDio.get('/pokemon/$clean');
+      final entry = PokemonEntry.fromApi(res.data as Map<String, dynamic>);
+      await CacheService.upsertPokemon(entry.toMap());
+      return entry;
     } catch (_) {}
     return null;
   }
 
-  /// Fetch the next [_pageSize] Pokémon starting at [offset] (by Pokédex number).
-  /// Appends to the current cached list and returns the full updated list.
+  /// Fetch the next [count] Pokémon starting at [startId] or [offset] (by Pokédex number).
+  /// Appends to the current cached list and returns the full updated list sorted by ID.
   static Future<List<PokemonEntry>> fetchMore({
+    int? startId,
+    int? count,
     required int offset,
     required List<PokemonEntry> existing,
   }) async {
     final hasNet = await _hasNetwork();
     if (!hasNet) return existing;
 
-    // Fetch offset+1 to offset+pageSize (PokeAPI is 0-indexed, Pokédex is 1-indexed)
-    final futures = List.generate(_pageSize, (i) async {
-      final id = offset + i + 1; // IDs start at 1
+    final fetchCount = count ?? _pageSize;
+    final beginId = startId ?? (offset + 1);
+
+    // Fetch beginId to beginId + fetchCount - 1
+    final futures = List.generate(fetchCount, (i) async {
+      final id = beginId + i;
       if (id > 1025) return null; // Pokédex cap
       try {
-        final res = await http
-            .get(Uri.parse('https://pokeapi.co/api/v2/pokemon/$id'))
-            .timeout(const Duration(seconds: 8));
-        final data = jsonDecode(res.body);
-        final types = (data['types'] as List)
-            .map((t) => t['type']['name'] as String)
-            .toList();
-        final species = getSpeciesData(id);
-        final height = (data['height'] as num?)?.toInt() ?? species.height;
-        final weight = (data['weight'] as num?)?.toInt() ?? species.weight;
-        return PokemonEntry(
-          id: data['id'] as int,
-          name: data['name'] as String,
-          types: types,
-          height: height,
-          weight: weight,
-        );
+        final res = await pokeApiDio.get('/pokemon/$id');
+        return PokemonEntry.fromApi(res.data as Map<String, dynamic>);
       } catch (_) {
         return null;
       }
@@ -190,7 +238,6 @@ class PokemonService {
 
     final results = await Future.wait(futures);
     final newEntries = results.whereType<PokemonEntry>().toList();
-    newEntries.sort((a, b) => a.id.compareTo(b.id));
 
     // Merge: keep existing, add new (avoid duplicates by id)
     final existingIds = existing.map((e) => e.id).toSet();
@@ -198,6 +245,7 @@ class PokemonService {
       ...existing,
       ...newEntries.where((e) => !existingIds.contains(e.id)),
     ];
+    merged.sort((a, b) => a.id.compareTo(b.id));
 
     // Persist to cache
     await CacheService.savePokemon(merged.map((e) => e.toMap()).toList());
@@ -225,9 +273,9 @@ class PokemonService {
 
   static Future<bool> _hasNetwork() async {
     try {
-      final result = await Connectivity()
-          .checkConnectivity()
-          .timeout(const Duration(seconds: 3));
+      final result = await Connectivity().checkConnectivity().timeout(
+        const Duration(seconds: 3),
+      );
       return result.any((r) => r != ConnectivityResult.none);
     } catch (_) {
       return false;
@@ -238,23 +286,8 @@ class PokemonService {
     final futures = List.generate(20, (i) async {
       final id = i + 1;
       try {
-        final res = await http
-            .get(Uri.parse('https://pokeapi.co/api/v2/pokemon/$id'))
-            .timeout(const Duration(seconds: 8));
-        final data = jsonDecode(res.body);
-        final types = (data['types'] as List)
-            .map((t) => t['type']['name'] as String)
-            .toList();
-        final species = getSpeciesData(id);
-        final height = (data['height'] as num?)?.toInt() ?? species.height;
-        final weight = (data['weight'] as num?)?.toInt() ?? species.weight;
-        return PokemonEntry(
-          id: data['id'] as int,
-          name: data['name'] as String,
-          types: types,
-          height: height,
-          weight: weight,
-        );
+        final res = await pokeApiDio.get('/pokemon/$id');
+        return PokemonEntry.fromApi(res.data as Map<String, dynamic>);
       } catch (_) {
         return null;
       }

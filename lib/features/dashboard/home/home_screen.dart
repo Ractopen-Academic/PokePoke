@@ -1,40 +1,22 @@
-import 'package:animate_do/animate_do.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:neopop/neopop.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 import 'package:pokepoke/core/services/cache_service.dart';
 import 'package:pokepoke/core/services/favourite_service.dart';
+import 'package:pokepoke/core/utils/type_colors.dart';
+import 'package:pokepoke/core/widgets/shimmer_box.dart';
 import 'package:pokepoke/features/dashboard/favourite/favourite_screen.dart';
 import 'package:pokepoke/features/dashboard/home/widgets/pokemon_detail_sheet.dart';
+import 'package:pokepoke/features/battle/battle_screen.dart';
+import 'package:pokepoke/features/dashboard/profile/profile_safari_screen.dart';
 
-// ─── Type → colour ───────────────────────────────────────────────────────────
-const Map<String, Color> _typeColors = {
-  'fire': Color(0xFFFF6B35),
-  'water': Color(0xFF4FC3F7),
-  'grass': Color(0xFF66BB6A),
-  'electric': Color(0xFFFFD600),
-  'psychic': Color(0xFFEC407A),
-  'ice': Color(0xFF80DEEA),
-  'dragon': Color(0xFF7C4DFF),
-  'dark': Color(0xFF546E7A),
-  'fairy': Color(0xFFF48FB1),
-  'fighting': Color(0xFFFF7043),
-  'poison': Color(0xFFAB47BC),
-  'ground': Color(0xFFD4A574),
-  'flying': Color(0xFF90CAF9),
-  'bug': Color(0xFF8BC34A),
-  'rock': Color(0xFFBCAAA4),
-  'ghost': Color(0xFF7986CB),
-  'steel': Color(0xFF90A4AE),
-  'normal': Color(0xFFBDBDBD),
-};
-
-Color _typeColor(String type) => _typeColors[type] ?? const Color(0xFFBDBDBD);
 
 // ─── Home Screen ─────────────────────────────────────────────────────────────
+
 class HomeScreen extends StatefulWidget {
   final List<PokemonEntry> preloadedPokemon;
   const HomeScreen({super.key, required this.preloadedPokemon});
@@ -47,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  final ScrollController _typeScrollCtrl = ScrollController();
   late final AnimationController _bgController;
 
   List<PokemonEntry> _allPokemon = [];
@@ -59,8 +42,25 @@ class _HomeScreenState extends State<HomeScreen>
   String? _onlineSearchError;
 
   static const List<String> _typeFilters = [
-    'All', 'fire', 'water', 'grass', 'electric',
-    'psychic', 'dragon', 'fighting', 'poison', 'ghost',
+    'All',
+    'normal',
+    'fire',
+    'water',
+    'grass',
+    'electric',
+    'ice',
+    'fighting',
+    'poison',
+    'ground',
+    'flying',
+    'psychic',
+    'bug',
+    'rock',
+    'ghost',
+    'dragon',
+    'steel',
+    'dark',
+    'fairy',
   ];
 
   @override
@@ -80,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen>
     _bgController.dispose();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
+    _typeScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -96,10 +97,21 @@ class _HomeScreenState extends State<HomeScreen>
             p.formattedId.toLowerCase().contains(q) ||
             (targetId != null && p.id == targetId);
         final matchType =
-            _selectedType == 'All' || p.types.contains(_selectedType);
+            _selectedType == 'All' || p.types.contains(_selectedType.toLowerCase());
         return matchSearch && matchType;
       }).toList();
     });
+  }
+
+  void _onPokemonIndexed(PokemonEntry entry) {
+    if (!mounted) return;
+    setState(() {
+      if (!_allPokemon.any((p) => p.id == entry.id)) {
+        _allPokemon.add(entry);
+        _allPokemon.sort((a, b) => a.id.compareTo(b.id));
+      }
+    });
+    _applyFilter();
   }
 
   Future<void> _searchOnline() async {
@@ -160,23 +172,68 @@ class _HomeScreenState extends State<HomeScreen>
   void _selectType(String type) {
     setState(() => _selectedType = type);
     _applyFilter();
+    final index = _typeFilters.indexOf(type);
+    if (index >= 0 && _typeScrollCtrl.hasClients) {
+      final target = (index * 72.0) - 100.0;
+      _typeScrollCtrl.animateTo(
+        target.clamp(0.0, _typeScrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  int get _nextTargetStartId {
+    if (_filtered.isNotEmpty) {
+      return _filtered.last.id + 1;
+    }
+    if (_allPokemon.isNotEmpty) {
+      return _allPokemon.last.id + 1;
+    }
+    return 1;
   }
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
+
+    final startId = _nextTargetStartId;
+    final hadSearch = _searchCtrl.text.trim().isNotEmpty;
+
     final updated = await PokemonService.fetchMore(
+      startId: startId,
+      count: 10,
       offset: _allPokemon.length,
       existing: _allPokemon,
     );
+
     if (mounted) {
       setState(() {
         _allPokemon = updated;
-        _hasMore = updated.length > _allPokemon.length ||
-            updated.last.id < 1025;
+        _hasMore = updated.isEmpty ? false : updated.last.id < 1025;
         _loadingMore = false;
+        if (hadSearch) {
+          _searchCtrl.clear();
+        }
       });
       _applyFilter();
+
+      // If user had searched, scroll so the previous item and new items are in view
+      if (hadSearch) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollCtrl.hasClients) {
+            final prevIndex = _filtered.indexWhere((p) => p.id == startId - 1);
+            if (prevIndex >= 0) {
+              final target = (prevIndex ~/ 2) * 160.0;
+              _scrollCtrl.animateTo(
+                target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOut,
+              );
+            }
+          }
+        });
+      }
     }
   }
 
@@ -201,20 +258,20 @@ class _HomeScreenState extends State<HomeScreen>
       case 1:
         return FavouriteScreen(
           allPokemon: _allPokemon,
-          typeColors: _typeColors,
           onExplore: () => setState(() => _navIndex = 0),
+          onSelectType: (type) {
+            setState(() => _navIndex = 0);
+            _selectType(type);
+          },
         );
       case 2:
-        return _buildPlaceholderTab(
-          'BATTLE ARENA',
-          'Battle mode coming soon in a future update!',
-          Icons.sports_kabaddi,
+        return BattleScreen(
+          allPokemon: _allPokemon,
+          onGoToSafari: () => setState(() => _navIndex = 3),
         );
       case 3:
-        return _buildPlaceholderTab(
-          'TRAINER PROFILE',
-          'Trainer profile & achievements coming soon!',
-          Icons.person_outline,
+        return ProfileSafariScreen(
+          onGoToBattle: () => setState(() => _navIndex = 2),
         );
       case 0:
       default:
@@ -231,6 +288,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ignore: unused_element
   Widget _buildPlaceholderTab(String title, String subtitle, IconData icon) {
     return Center(
       child: Padding(
@@ -283,142 +341,135 @@ class _HomeScreenState extends State<HomeScreen>
 
   // ── Header ──────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
-    return FadeInDown(
-      duration: const Duration(milliseconds: 600),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-        child: Row(
-          children: [
-            SvgPicture.asset('assets/images/pokeball.svg',
-                width: 34, height: 34),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('PokéPoke',
-                    style: GoogleFonts.pressStart2p(
-                        color: Colors.white, fontSize: 13)),
-                Text("Gotta catch 'em all!",
-                    style: GoogleFonts.inter(
-                        color: Colors.white38, fontSize: 10)),
-              ],
-            ),
-            const Spacer(),
-            Container(
-              decoration: BoxDecoration(
-                  color: Colors.white10,
-                  borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.all(10),
-              child: const Icon(Icons.notifications_outlined,
-                  color: Colors.white70, size: 20),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Row(
+        children: [
+          SvgPicture.asset('assets/images/pokeball.svg',
+              width: 34, height: 34),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('PokéPoke',
+                  style: GoogleFonts.pressStart2p(
+                      color: Colors.white, fontSize: 13)),
+              Text("Gotta catch 'em all!",
+                  style: GoogleFonts.inter(
+                      color: Colors.white38, fontSize: 10)),
+            ],
+          ),
+          const Spacer(),
+          Container(
+            decoration: BoxDecoration(
+                color: Colors.white10,
+                borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.all(10),
+            child: const Icon(Icons.notifications_outlined,
+                color: Colors.white70, size: 20),
+          ),
+        ],
       ),
-    );
+    ).animate().fadeIn(duration: 600.ms).slideY(begin: -0.2, curve: Curves.easeOut);
   }
+
 
   // ── Search bar ──────────────────────────────────────────────────────────────
   Widget _buildSearchBar() {
-    return FadeInDown(
-      delay: const Duration(milliseconds: 100),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white10,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white12),
-          ),
-          child: TextField(
-            controller: _searchCtrl,
-            style: GoogleFonts.inter(color: Colors.white),
-            onSubmitted: (_) => _searchOnline(),
-            decoration: InputDecoration(
-              hintText: 'Search Pokémon name or #ID…',
-              hintStyle:
-                  GoogleFonts.inter(color: Colors.white38, fontSize: 13),
-              prefixIcon:
-                  const Icon(Icons.search, color: Colors.white38, size: 20),
-              suffixIcon: _searchCtrl.text.isNotEmpty
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.clear,
-                              color: Colors.white38, size: 18),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            _applyFilter();
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.travel_explore,
-                              color: Color(0xFFFFCC00), size: 18),
-                          tooltip: 'Search Online',
-                          onPressed: _searchOnline,
-                        ),
-                      ],
-                    )
-                  : null,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 11),
-            ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white10,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: TextField(
+          controller: _searchCtrl,
+          style: GoogleFonts.inter(color: Colors.white),
+          onSubmitted: (_) => _searchOnline(),
+          decoration: InputDecoration(
+            hintText: 'Search Pokémon name or #ID…',
+            hintStyle:
+                GoogleFonts.inter(color: Colors.white38, fontSize: 13),
+            prefixIcon:
+                const Icon(Icons.search, color: Colors.white38, size: 20),
+            suffixIcon: _searchCtrl.text.isNotEmpty
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.clear,
+                            color: Colors.white38, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          _applyFilter();
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.travel_explore,
+                            color: Color(0xFFFFCC00), size: 18),
+                        tooltip: 'Search Online',
+                        onPressed: _searchOnline,
+                      ),
+                    ],
+                  )
+                : null,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 11),
           ),
         ),
       ),
-    );
+    ).animate().fadeIn(delay: 100.ms, duration: 400.ms);
   }
 
   // ── Type filter chips ────────────────────────────────────────────────────────
   Widget _buildTypeFilter() {
-    return FadeInDown(
-      delay: const Duration(milliseconds: 150),
-      child: SizedBox(
-        height: 34,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: _typeFilters.length,
-          separatorBuilder: (_, i) => const SizedBox(width: 8),
-          itemBuilder: (_, i) {
-            final type = _typeFilters[i];
-            final selected = _selectedType == type;
-            final color =
-                type == 'All' ? Colors.white : _typeColor(type);
-            return GestureDetector(
-              onTap: () => _selectType(type),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: selected ? color : Colors.white10,
-                  borderRadius: BorderRadius.circular(20),
-                  border:
-                      Border.all(color: selected ? color : Colors.white12),
-                ),
-                child: Text(
-                  type == 'All'
-                      ? 'All'
-                      : type[0].toUpperCase() + type.substring(1),
-                  style: GoogleFonts.inter(
-                    color: selected
-                        ? (color == Colors.white
-                            ? Colors.black
-                            : Colors.white)
-                        : Colors.white60,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+    return SizedBox(
+      height: 34,
+      child: ListView.separated(
+        controller: _typeScrollCtrl,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _typeFilters.length,
+        separatorBuilder: (_, i) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final type = _typeFilters[i];
+          final selected = _selectedType == type;
+          final color =
+              type == 'All' ? Colors.white : typeColor(type);
+          return GestureDetector(
+            onTap: () => _selectType(type),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected ? color : Colors.white10,
+                borderRadius: BorderRadius.circular(20),
+                border:
+                    Border.all(color: selected ? color : Colors.white12),
+              ),
+              child: Text(
+                type == 'All'
+                    ? 'All'
+                    : type[0].toUpperCase() + type.substring(1),
+                style: GoogleFonts.inter(
+                  color: selected
+                      ? (color == Colors.white
+                          ? Colors.black
+                          : Colors.white)
+                      : Colors.white60,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
-    );
+    ).animate().fadeIn(delay: 150.ms, duration: 400.ms);
   }
 
   // ── Section title ───────────────────────────────────────────────────────────
@@ -570,14 +621,12 @@ class _HomeScreenState extends State<HomeScreen>
           return _buildLoadMoreTile();
         }
         final p = _filtered[i];
-        return FadeIn(
+        return _PokemonCard(
           key: ValueKey(p.id),
-          duration: const Duration(milliseconds: 250),
-          child: _PokemonCard(
-            key: ValueKey(p.id),
-            pokemon: p,
-          ),
-        );
+          pokemon: p,
+          onSelectType: _selectType,
+          onPokemonIndexed: _onPokemonIndexed,
+        ).animate(key: ValueKey(p.id)).fadeIn(duration: 250.ms);
       },
     );
   }
@@ -590,6 +639,11 @@ class _HomeScreenState extends State<HomeScreen>
                 color: Colors.white24, fontSize: 7)),
       );
     }
+
+    final nextStart = _nextTargetStartId;
+    final nextEnd = (nextStart + 9).clamp(1, 1025);
+    final rangeLabel =
+        '#${nextStart.toString().padLeft(3, '0')}–#${nextEnd.toString().padLeft(3, '0')}';
 
     return Container(
       decoration: BoxDecoration(
@@ -611,7 +665,7 @@ class _HomeScreenState extends State<HomeScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    '#${_allPokemon.length + 1}–#${_allPokemon.length + 10}',
+                    rangeLabel,
                     style: GoogleFonts.inter(
                         color: Colors.white38, fontSize: 10),
                   ),
@@ -648,104 +702,36 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildBottomNav() {
     return ValueListenableBuilder<Set<int>>(
       valueListenable: FavouriteService.favouritesNotifier,
-      builder: (context, favs, _) {
-        final items = [
-          (Icons.catching_pokemon, 'Pokédex', 0),
-          (Icons.favorite_border, 'Favourites', favs.length),
-          (Icons.sports_kabaddi, 'Battle', 0),
-          (Icons.person_outline, 'Profile', 0),
-        ];
-
-        return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF16213E),
-            border: Border(top: BorderSide(color: Colors.white10)),
+      builder: (context, favs, _) => NavigationBar(
+        height: 68,
+        backgroundColor: const Color(0xFF16213E),
+        indicatorColor: const Color(0x26FF1C1C),
+        selectedIndex: _navIndex,
+        onDestinationSelected: (index) => setState(() => _navIndex = index),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.catching_pokemon),
+            label: 'Pokédex',
           ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(items.length, (i) {
-                  final (icon, label, badgeCount) = items[i];
-                  final active = _navIndex == i;
-                  return GestureDetector(
-                    onTap: () => setState(() => _navIndex = i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: active
-                            ? const Color(0xFFFF1C1C).withValues(alpha: 0.15)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Icon(
-                                icon,
-                                color: active
-                                    ? const Color(0xFFFF1C1C)
-                                    : Colors.white38,
-                                size: 22,
-                              ),
-                              if (badgeCount > 0)
-                                Positioned(
-                                  top: -4,
-                                  right: -8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 4, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFF3B56),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 14,
-                                      minHeight: 14,
-                                    ),
-                                    child: Text(
-                                      '$badgeCount',
-                                      textAlign: TextAlign.center,
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            label,
-                            style: GoogleFonts.inter(
-                              color: active
-                                  ? const Color(0xFFFF1C1C)
-                                  : Colors.white38,
-                              fontSize: 10,
-                              fontWeight: active
-                                  ? FontWeight.w700
-                                  : FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ),
+          NavigationDestination(
+            icon: Badge.count(
+              count: favs.length,
+              isLabelVisible: favs.isNotEmpty,
+              child: const Icon(Icons.favorite_border),
             ),
+            label: 'Favourites',
           ),
-        );
-      },
+          const NavigationDestination(
+            icon: Icon(Icons.sports_kabaddi),
+            label: 'Battle',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            label: 'Profile',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -753,56 +739,48 @@ class _HomeScreenState extends State<HomeScreen>
 // ─── Pokemon Card ─────────────────────────────────────────────────────────────
 class _PokemonCard extends StatefulWidget {
   final PokemonEntry pokemon;
-  const _PokemonCard({super.key, required this.pokemon});
+  final void Function(String type)? onSelectType;
+  final void Function(PokemonEntry pokemon)? onPokemonIndexed;
+
+  const _PokemonCard({
+    super.key,
+    required this.pokemon,
+    this.onSelectType,
+    this.onPokemonIndexed,
+  });
 
   @override
   State<_PokemonCard> createState() => _PokemonCardState();
 }
 
-class _PokemonCardState extends State<_PokemonCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _press;
-  late final Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _press = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 120),
-        lowerBound: 0,
-        upperBound: 1);
-    _scale = Tween<double>(begin: 1.0, end: 0.94)
-        .animate(CurvedAnimation(parent: _press, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _press.dispose();
-    super.dispose();
-  }
+class _PokemonCardState extends State<_PokemonCard> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final p = widget.pokemon;
-    final primary = _typeColor(p.types.first);
+    final primary = typeColor(p.types.first);
     final secondary = p.types.length > 1
-        ? _typeColor(p.types[1])
+        ? typeColor(p.types[1])
         : primary.withValues(alpha: 0.5);
 
     return GestureDetector(
-      onTapDown: (_) => _press.forward(),
-      onTapUp: (_) => _press.reverse(),
-      onTapCancel: () => _press.reverse(),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
       onTap: () {
         PokemonDetailSheet.show(
           context,
           pokemon: p,
-          typeColors: _typeColors,
+          typeColors: kTypeColors,
+          onSelectType: widget.onSelectType,
+          onPokemonIndexed: widget.onPokemonIndexed,
         );
       },
-      child: ScaleTransition(
-        scale: _scale,
+      child: AnimatedScale(
+        scale: _pressed ? 0.94 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeInOut,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
@@ -841,26 +819,12 @@ class _PokemonCardState extends State<_PokemonCard>
                 child: SizedBox(
                   width: p.spriteSize,
                   height: p.spriteSize,
-                  child: Image.network(
-                    p.spriteUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: p.spriteUrl,
                     fit: BoxFit.contain,
                     alignment: Alignment.bottomRight,
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return Shimmer.fromColors(
-                        baseColor: Colors.white12,
-                        highlightColor: Colors.white30,
-                        child: Container(
-                          width: p.spriteSize,
-                          height: p.spriteSize,
-                          decoration: const BoxDecoration(
-                            color: Colors.white12,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      );
-                    },
-                    errorBuilder: (_, p0, p1) => Icon(
+                    placeholder: (context, url) => ShimmerBox(size: p.spriteSize),
+                    errorWidget: (_, p0, p1) => Icon(
                       Icons.catching_pokemon,
                       color: Colors.white38,
                       size: p.spriteSize * 0.55,
@@ -929,7 +893,10 @@ class _PokemonCardState extends State<_PokemonCard>
                     Wrap(
                       spacing: 4,
                       children: p.types
-                          .map((t) => _TypeChip(type: t))
+                          .map((t) => _TypeChip(
+                                type: t,
+                                onTap: () => widget.onSelectType?.call(t),
+                              ))
                           .toList(),
                     ),
                     const Spacer(),
@@ -973,22 +940,28 @@ class _PokemonCardState extends State<_PokemonCard>
   }
 }
 
+
 // ─── Type chip ────────────────────────────────────────────────────────────────
 class _TypeChip extends StatelessWidget {
   final String type;
-  const _TypeChip({required this.type});
+  final VoidCallback? onTap;
+  const _TypeChip({required this.type, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-          color: Colors.white24,
-          borderRadius: BorderRadius.circular(20)),
-      child: Text(
-        type[0].toUpperCase() + type.substring(1),
-        style: GoogleFonts.inter(
-            color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+            color: Colors.white24,
+            borderRadius: BorderRadius.circular(20)),
+        child: Text(
+          type[0].toUpperCase() + type.substring(1),
+          style: GoogleFonts.inter(
+              color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }

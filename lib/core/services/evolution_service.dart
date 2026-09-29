@@ -1,22 +1,31 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
+import 'package:pokepoke/core/services/cache_service.dart';
+import 'package:pokepoke/core/services/poke_api_client.dart';
 
 class EvolutionNode {
   final int id;
   final String name;
   final String? trigger; // e.g. "Level 16", "Thunder Stone", "Trade"
 
-  const EvolutionNode({
-    required this.id,
-    required this.name,
-    this.trigger,
-  });
+  const EvolutionNode({required this.id, required this.name, this.trigger});
 
   String get displayName =>
       name[0].toUpperCase() + name.substring(1).replaceAll('-', ' ');
 
   String get spriteUrl =>
       'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$id.png';
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'name': name,
+    if (trigger != null) 'trigger': trigger,
+  };
+
+  factory EvolutionNode.fromMap(Map<String, dynamic> m) => EvolutionNode(
+    id: m['id'] as int,
+    name: m['name'] as String,
+    trigger: m['trigger'] as String?,
+  );
 }
 
 class EvolutionChainData {
@@ -24,6 +33,17 @@ class EvolutionChainData {
   const EvolutionChainData({required this.nodes});
 
   bool get hasEvolution => nodes.length > 1;
+
+  Map<String, dynamic> toMap() => {
+    'nodes': nodes.map((n) => n.toMap()).toList(),
+  };
+
+  factory EvolutionChainData.fromMap(Map<String, dynamic> m) =>
+      EvolutionChainData(
+        nodes: (m['nodes'] as List)
+            .map((e) => EvolutionNode.fromMap(e as Map<String, dynamic>))
+            .toList(),
+      );
 }
 
 class EvolutionService {
@@ -126,7 +146,11 @@ class EvolutionService {
     // Jigglypuff line
     39: _chain([
       const EvolutionNode(id: 174, name: 'igglybuff'),
-      const EvolutionNode(id: 39, name: 'jigglypuff', trigger: 'High Friendship'),
+      const EvolutionNode(
+        id: 39,
+        name: 'jigglypuff',
+        trigger: 'High Friendship',
+      ),
       const EvolutionNode(id: 40, name: 'wigglytuff', trigger: 'Moon Stone'),
     ]),
 
@@ -144,16 +168,17 @@ class EvolutionService {
     ]),
 
     // Mewtwo (Legendary - No Evolution)
-    150: _chain([
-      const EvolutionNode(id: 150, name: 'mewtwo'),
-    ]),
+    150: _chain([const EvolutionNode(id: 150, name: 'mewtwo')]),
   };
 
   static EvolutionChainData _chain(List<EvolutionNode> nodes) =>
       EvolutionChainData(nodes: nodes);
 
   /// Get evolution chain for a Pokémon by ID, with built-in instant data and PokeAPI fallback.
-  static Future<EvolutionChainData> getEvolutionChain(int pokemonId, String fallbackName) async {
+  static Future<EvolutionChainData> getEvolutionChain(
+    int pokemonId,
+    String fallbackName,
+  ) async {
     // Check in-memory cache
     if (_cache.containsKey(pokemonId)) {
       return _cache[pokemonId]!;
@@ -166,37 +191,46 @@ class EvolutionService {
       return data;
     }
 
+    // Check persistent disk cache
+    final cachedData = CacheService.getCachedEvolutionChain(pokemonId);
+    if (cachedData != null) {
+      try {
+        final parsed = EvolutionChainData.fromMap(cachedData);
+        _cache[pokemonId] = parsed;
+        return parsed;
+      } catch (error) {
+        debugPrint(
+          'Ignoring invalid cached evolution data for $pokemonId: $error',
+        );
+      }
+    }
+
     // Attempt PokeAPI fetch
     try {
-      final speciesRes = await http.get(
-        Uri.parse('https://pokeapi.co/api/v2/pokemon-species/$pokemonId'),
-        headers: {'User-Agent': 'PokePoke-App'},
-      ).timeout(const Duration(seconds: 6));
+      final speciesRes = await pokeApiDio.get('/pokemon-species/$pokemonId');
+      final speciesData = speciesRes.data as Map<String, dynamic>;
+      final evolutionChainUrl =
+          speciesData['evolution_chain']?['url'] as String?;
 
-      if (speciesRes.statusCode == 200) {
-        final speciesData = jsonDecode(speciesRes.body);
-        final evolutionChainUrl = speciesData['evolution_chain']?['url'] as String?;
-
-        if (evolutionChainUrl != null) {
-          final evoRes = await http.get(
-            Uri.parse(evolutionChainUrl),
-            headers: {'User-Agent': 'PokePoke-App'},
-          ).timeout(const Duration(seconds: 6));
-
-          if (evoRes.statusCode == 200) {
-            final evoData = jsonDecode(evoRes.body);
-            final nodes = <EvolutionNode>[];
-            _parseChainNode(evoData['chain'], nodes);
-            if (nodes.isNotEmpty) {
-              final result = EvolutionChainData(nodes: nodes);
-              _cache[pokemonId] = result;
-              return result;
-            }
+      if (evolutionChainUrl != null) {
+        final evoRes = await pokeApiDio.get(evolutionChainUrl);
+        final evoData = evoRes.data as Map<String, dynamic>;
+        final nodes = <EvolutionNode>[];
+        _parseChainNode(evoData['chain'], nodes);
+        if (nodes.isNotEmpty) {
+          final result = EvolutionChainData(nodes: nodes);
+          _cache[pokemonId] = result;
+          // Persist chain for this id and all related nodes
+          final map = result.toMap();
+          for (final node in nodes) {
+            _cache[node.id] = result;
+            await CacheService.saveEvolutionChain(node.id, map);
           }
+          return result;
         }
       }
-    } catch (_) {
-      // Fall through to fallback
+    } catch (error) {
+      debugPrint('Evolution API unavailable for $pokemonId: $error');
     }
 
     // Fallback: single-stage node
@@ -207,7 +241,11 @@ class EvolutionService {
     return fallback;
   }
 
-  static void _parseChainNode(Map<String, dynamic>? rawNode, List<EvolutionNode> outList, [String? trigger]) {
+  static void _parseChainNode(
+    Map<String, dynamic>? rawNode,
+    List<EvolutionNode> outList, [
+    String? trigger,
+  ]) {
     if (rawNode == null) return;
 
     final species = rawNode['species'] as Map<String, dynamic>?;
@@ -217,11 +255,7 @@ class EvolutionService {
       // Extract ID from URL: e.g. "https://pokeapi.co/api/v2/pokemon-species/1/"
       final id = _extractIdFromUrl(url);
       if (id != null) {
-        outList.add(EvolutionNode(
-          id: id,
-          name: name,
-          trigger: trigger,
-        ));
+        outList.add(EvolutionNode(id: id, name: name, trigger: trigger));
       }
     }
 
@@ -229,7 +263,9 @@ class EvolutionService {
     if (evolvesTo != null && evolvesTo.isNotEmpty) {
       for (final next in evolvesTo) {
         final nextMap = next as Map<String, dynamic>;
-        final details = (nextMap['evolution_details'] as List?)?.firstOrNull as Map<String, dynamic>?;
+        final details =
+            (nextMap['evolution_details'] as List?)?.firstOrNull
+                as Map<String, dynamic>?;
         final nextTrigger = _formatTrigger(details);
         _parseChainNode(nextMap, outList, nextTrigger);
       }
@@ -251,7 +287,10 @@ class EvolutionService {
 
     final item = details['item']?['name'] as String?;
     if (item != null) {
-      return item.split('-').map((s) => s[0].toUpperCase() + s.substring(1)).join(' ');
+      return item
+          .split('-')
+          .map((s) => s[0].toUpperCase() + s.substring(1))
+          .join(' ');
     }
 
     final triggerName = details['trigger']?['name'] as String?;
