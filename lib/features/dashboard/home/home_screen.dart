@@ -1,4 +1,5 @@
 import 'package:animate_do/animate_do.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -47,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _searchCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  final ScrollController _typeScrollCtrl = ScrollController();
   late final AnimationController _bgController;
 
   List<PokemonEntry> _allPokemon = [];
@@ -59,8 +61,25 @@ class _HomeScreenState extends State<HomeScreen>
   String? _onlineSearchError;
 
   static const List<String> _typeFilters = [
-    'All', 'fire', 'water', 'grass', 'electric',
-    'psychic', 'dragon', 'fighting', 'poison', 'ghost',
+    'All',
+    'normal',
+    'fire',
+    'water',
+    'grass',
+    'electric',
+    'ice',
+    'fighting',
+    'poison',
+    'ground',
+    'flying',
+    'psychic',
+    'bug',
+    'rock',
+    'ghost',
+    'dragon',
+    'steel',
+    'dark',
+    'fairy',
   ];
 
   @override
@@ -80,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen>
     _bgController.dispose();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
+    _typeScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -96,10 +116,21 @@ class _HomeScreenState extends State<HomeScreen>
             p.formattedId.toLowerCase().contains(q) ||
             (targetId != null && p.id == targetId);
         final matchType =
-            _selectedType == 'All' || p.types.contains(_selectedType);
+            _selectedType == 'All' || p.types.contains(_selectedType.toLowerCase());
         return matchSearch && matchType;
       }).toList();
     });
+  }
+
+  void _onPokemonIndexed(PokemonEntry entry) {
+    if (!mounted) return;
+    setState(() {
+      if (!_allPokemon.any((p) => p.id == entry.id)) {
+        _allPokemon.add(entry);
+        _allPokemon.sort((a, b) => a.id.compareTo(b.id));
+      }
+    });
+    _applyFilter();
   }
 
   Future<void> _searchOnline() async {
@@ -160,23 +191,68 @@ class _HomeScreenState extends State<HomeScreen>
   void _selectType(String type) {
     setState(() => _selectedType = type);
     _applyFilter();
+    final index = _typeFilters.indexOf(type);
+    if (index >= 0 && _typeScrollCtrl.hasClients) {
+      final target = (index * 72.0) - 100.0;
+      _typeScrollCtrl.animateTo(
+        target.clamp(0.0, _typeScrollCtrl.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  int get _nextTargetStartId {
+    if (_filtered.isNotEmpty) {
+      return _filtered.last.id + 1;
+    }
+    if (_allPokemon.isNotEmpty) {
+      return _allPokemon.last.id + 1;
+    }
+    return 1;
   }
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
+
+    final startId = _nextTargetStartId;
+    final hadSearch = _searchCtrl.text.trim().isNotEmpty;
+
     final updated = await PokemonService.fetchMore(
+      startId: startId,
+      count: 10,
       offset: _allPokemon.length,
       existing: _allPokemon,
     );
+
     if (mounted) {
       setState(() {
         _allPokemon = updated;
-        _hasMore = updated.length > _allPokemon.length ||
-            updated.last.id < 1025;
+        _hasMore = updated.isEmpty ? false : updated.last.id < 1025;
         _loadingMore = false;
+        if (hadSearch) {
+          _searchCtrl.clear();
+        }
       });
       _applyFilter();
+
+      // If user had searched, scroll so the previous item and new items are in view
+      if (hadSearch) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollCtrl.hasClients) {
+            final prevIndex = _filtered.indexWhere((p) => p.id == startId - 1);
+            if (prevIndex >= 0) {
+              final target = (prevIndex ~/ 2) * 160.0;
+              _scrollCtrl.animateTo(
+                target.clamp(0.0, _scrollCtrl.position.maxScrollExtent),
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOut,
+              );
+            }
+          }
+        });
+      }
     }
   }
 
@@ -203,6 +279,10 @@ class _HomeScreenState extends State<HomeScreen>
           allPokemon: _allPokemon,
           typeColors: _typeColors,
           onExplore: () => setState(() => _navIndex = 0),
+          onSelectType: (type) {
+            setState(() => _navIndex = 0);
+            _selectType(type);
+          },
         );
       case 2:
         return _buildPlaceholderTab(
@@ -378,6 +458,7 @@ class _HomeScreenState extends State<HomeScreen>
       child: SizedBox(
         height: 34,
         child: ListView.separated(
+          controller: _typeScrollCtrl,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           itemCount: _typeFilters.length,
@@ -576,6 +657,8 @@ class _HomeScreenState extends State<HomeScreen>
           child: _PokemonCard(
             key: ValueKey(p.id),
             pokemon: p,
+            onSelectType: _selectType,
+            onPokemonIndexed: _onPokemonIndexed,
           ),
         );
       },
@@ -590,6 +673,11 @@ class _HomeScreenState extends State<HomeScreen>
                 color: Colors.white24, fontSize: 7)),
       );
     }
+
+    final nextStart = _nextTargetStartId;
+    final nextEnd = (nextStart + 9).clamp(1, 1025);
+    final rangeLabel =
+        '#${nextStart.toString().padLeft(3, '0')}–#${nextEnd.toString().padLeft(3, '0')}';
 
     return Container(
       decoration: BoxDecoration(
@@ -611,7 +699,7 @@ class _HomeScreenState extends State<HomeScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    '#${_allPokemon.length + 1}–#${_allPokemon.length + 10}',
+                    rangeLabel,
                     style: GoogleFonts.inter(
                         color: Colors.white38, fontSize: 10),
                   ),
@@ -753,7 +841,15 @@ class _HomeScreenState extends State<HomeScreen>
 // ─── Pokemon Card ─────────────────────────────────────────────────────────────
 class _PokemonCard extends StatefulWidget {
   final PokemonEntry pokemon;
-  const _PokemonCard({super.key, required this.pokemon});
+  final void Function(String type)? onSelectType;
+  final void Function(PokemonEntry pokemon)? onPokemonIndexed;
+
+  const _PokemonCard({
+    super.key,
+    required this.pokemon,
+    this.onSelectType,
+    this.onPokemonIndexed,
+  });
 
   @override
   State<_PokemonCard> createState() => _PokemonCardState();
@@ -799,6 +895,8 @@ class _PokemonCardState extends State<_PokemonCard>
           context,
           pokemon: p,
           typeColors: _typeColors,
+          onSelectType: widget.onSelectType,
+          onPokemonIndexed: widget.onPokemonIndexed,
         );
       },
       child: ScaleTransition(
@@ -841,26 +939,23 @@ class _PokemonCardState extends State<_PokemonCard>
                 child: SizedBox(
                   width: p.spriteSize,
                   height: p.spriteSize,
-                  child: Image.network(
-                    p.spriteUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: p.spriteUrl,
                     fit: BoxFit.contain,
                     alignment: Alignment.bottomRight,
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return Shimmer.fromColors(
-                        baseColor: Colors.white12,
-                        highlightColor: Colors.white30,
-                        child: Container(
-                          width: p.spriteSize,
-                          height: p.spriteSize,
-                          decoration: const BoxDecoration(
-                            color: Colors.white12,
-                            shape: BoxShape.circle,
-                          ),
+                    placeholder: (context, url) => Shimmer.fromColors(
+                      baseColor: Colors.white12,
+                      highlightColor: Colors.white30,
+                      child: Container(
+                        width: p.spriteSize,
+                        height: p.spriteSize,
+                        decoration: const BoxDecoration(
+                          color: Colors.white12,
+                          shape: BoxShape.circle,
                         ),
-                      );
-                    },
-                    errorBuilder: (_, p0, p1) => Icon(
+                      ),
+                    ),
+                    errorWidget: (_, p0, p1) => Icon(
                       Icons.catching_pokemon,
                       color: Colors.white38,
                       size: p.spriteSize * 0.55,
@@ -929,7 +1024,10 @@ class _PokemonCardState extends State<_PokemonCard>
                     Wrap(
                       spacing: 4,
                       children: p.types
-                          .map((t) => _TypeChip(type: t))
+                          .map((t) => _TypeChip(
+                                type: t,
+                                onTap: () => widget.onSelectType?.call(t),
+                              ))
                           .toList(),
                     ),
                     const Spacer(),
@@ -976,19 +1074,24 @@ class _PokemonCardState extends State<_PokemonCard>
 // ─── Type chip ────────────────────────────────────────────────────────────────
 class _TypeChip extends StatelessWidget {
   final String type;
-  const _TypeChip({required this.type});
+  final VoidCallback? onTap;
+  const _TypeChip({required this.type, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-          color: Colors.white24,
-          borderRadius: BorderRadius.circular(20)),
-      child: Text(
-        type[0].toUpperCase() + type.substring(1),
-        style: GoogleFonts.inter(
-            color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+            color: Colors.white24,
+            borderRadius: BorderRadius.circular(20)),
+        child: Text(
+          type[0].toUpperCase() + type.substring(1),
+          style: GoogleFonts.inter(
+              color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }

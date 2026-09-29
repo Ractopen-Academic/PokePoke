@@ -7,43 +7,44 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pokepoke/core/services/cache_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:pokepoke/core/services/favourite_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
 import 'package:pokepoke/core/widgets/loading_screen/loading_screen.dart';
 import 'package:pokepoke/features/dashboard/home/home_screen.dart';
 
-// Smogon-inspired tips
+// Smogon-inspired tips (clean, competitive advice)
 const List<String> _kTips = [
-  '💡 Stealth Rock chips 25% off Fire-types on switch — always pack Rapid Spin or Defog!',
-  '⚡ Speed ties are broken randomly — always have a backup plan.',
-  '🔥 Charizard-Y doubles Fire-type power with Drought. Pair with Solar Beam!',
-  '💧 Rain teams love Swift Swim users — Kingdra is a classic rain sweeper.',
-  '🌿 Spore has 100% accuracy and puts targets to sleep. Only Grass-types are immune.',
-  '👻 Ghost-types are immune to Normal AND Fighting moves — great defensive typings.',
-  '🧊 Ice Shard is priority — great for finishing off Dragon-types first.',
-  '🐉 Dragon-types are only weak to Dragon, Ice, and Fairy. Fairy was added in Gen 6!',
-  '🌀 Trick Room reverses speed order for 5 turns. Slow, bulky Pokémon love it.',
-  '🎯 Choice Scarf boosts Speed 50% but locks you to one move. Use wisely!',
-  '🛡️ Eviolite boosts Def and Sp. Def 50% for Pokémon that can still evolve.',
-  '🌟 Spikes stack to 3 layers, dealing up to 25% chip per switch-in.',
-  '💫 Electric Terrain boosts Electric moves 30% and prevents sleep.',
-  '🔄 U-turn and Volt Switch let you hit and switch — great for momentum.',
-  '🏔️ Sandstorm deals 1/16 chip to non-Rock, Steel, or Ground types per turn.',
-  '❄️ Snow (replacing Hail in Gen 9) boosts Ice-type Sp. Def by 50%.',
-  '🌙 Knock Off removes held items and deals 1.5× damage if they had one.',
-  '🎭 Protean changes Greninja\'s type to match every move it uses.',
-  '⚔️ Critical hits ignore your Attack drops and the foe\'s Defense boosts.',
-  '🌈 Weather Ball changes type and doubles power during weather effects!',
-  '🧲 Steel-types resist 10 type matchups — excellent defensive pivots.',
-  '🌊 Surf hits all adjacent Pokémon in Doubles — beware of hitting your partner!',
-  '🦋 Quiver Dance raises Sp. Atk, Sp. Def, AND Speed — one of the best moves.',
-  '💎 Sheer Force removes secondary effects but boosts move power by 30%.',
-  '🌺 Fairy-types are immune to Dragon moves — hard counters to Dragon sweepers.',
-  '🏋️ Pure Power doubles Attack, making Medicham hit incredibly hard.',
-  '🔮 Focus Sash lets a full-HP Pokémon survive any one-hit KO with 1 HP.',
-  '🌀 Substitute blocks status moves and lets you scout Choice-locked foes.',
-  '🎪 Baton Pass transfers stat boosts to the next Pokémon — build a chain!',
-  '🍃 Regenerator heals 1/3 HP on switching out — great for pivot Pokémon.',
+  'Stealth Rock chips 25% off Fire-types on switch — always pack Rapid Spin or Defog!',
+  'Speed ties are broken randomly — always have a backup plan.',
+  'Charizard-Y doubles Fire-type power with Drought. Pair with Solar Beam!',
+  'Rain teams love Swift Swim users — Kingdra is a classic rain sweeper.',
+  'Spore has 100% accuracy and puts targets to sleep. Only Grass-types are immune.',
+  'Ghost-types are immune to Normal AND Fighting moves — great defensive typings.',
+  'Ice Shard is priority — great for finishing off Dragon-types first.',
+  'Dragon-types are only weak to Dragon, Ice, and Fairy. Fairy was added in Gen 6!',
+  'Trick Room reverses speed order for 5 turns. Slow, bulky Pokémon love it.',
+  'Choice Scarf boosts Speed 50% but locks you to one move. Use wisely!',
+  'Eviolite boosts Def and Sp. Def 50% for Pokémon that can still evolve.',
+  'Spikes stack to 3 layers, dealing up to 25% chip per switch-in.',
+  'Electric Terrain boosts Electric moves 30% and prevents sleep.',
+  'U-turn and Volt Switch let you hit and switch — great for momentum.',
+  'Sandstorm deals 1/16 chip to non-Rock, Steel, or Ground types per turn.',
+  'Snow (replacing Hail in Gen 9) boosts Ice-type Sp. Def by 50%.',
+  'Knock Off removes held items and deals 1.5× damage if they had one.',
+  'Protean changes Greninja\'s type to match every move it uses.',
+  'Critical hits ignore your Attack drops and the foe\'s Defense boosts.',
+  'Weather Ball changes type and doubles power during weather effects!',
+  'Steel-types resist 10 type matchups — excellent defensive pivots.',
+  'Surf hits all adjacent Pokémon in Doubles — beware of hitting your partner!',
+  'Quiver Dance raises Sp. Atk, Sp. Def, AND Speed — one of the best moves.',
+  'Sheer Force removes secondary effects but boosts move power by 30%.',
+  'Fairy-types are immune to Dragon moves — hard counters to Dragon sweepers.',
+  'Pure Power doubles Attack, making Medicham hit incredibly hard.',
+  'Focus Sash lets a full-HP Pokémon survive any one-hit KO with 1 HP.',
+  'Substitute blocks status moves and lets you scout Choice-locked foes.',
+  'Baton Pass transfers stat boosts to the next Pokémon — build a chain!',
+  'Regenerator heals 1/3 HP on switching out — great for pivot Pokémon.',
 ];
 
 class SplashScreen extends StatefulWidget {
@@ -146,6 +147,12 @@ class _SplashScreenState extends State<SplashScreen>
         onStatus: (msg) => _setStatus(msg, _progress),
       ).timeout(const Duration(seconds: 5));
       _loadedPokemon = pokemon;
+      // Pre-cache first batch of sprites so they show up instantly on home screen with zero delay
+      if (mounted) {
+        for (final p in _loadedPokemon.take(16)) {
+          precacheImage(CachedNetworkImageProvider(p.spriteUrl), context);
+        }
+      }
     } catch (_) {
       _loadedPokemon = kBuiltInPokemon;
     }
@@ -322,12 +329,20 @@ class _SplashScreenState extends State<SplashScreen>
         ),
         child: Column(
           children: [
-            Text(
-              '— TRAINER TIP —',
-              style: GoogleFonts.pressStart2p(
-                  color: const Color(0xFFFF1C1C),
-                  fontSize: 7,
-                  letterSpacing: 2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.tips_and_updates_outlined,
+                    color: Color(0xFFFF1C1C), size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  'TRAINER TIP',
+                  style: GoogleFonts.pressStart2p(
+                      color: const Color(0xFFFF1C1C),
+                      fontSize: 8,
+                      letterSpacing: 2),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             AnimatedSwitcher(

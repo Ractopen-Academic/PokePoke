@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pokepoke/core/data/pokemon_seed.dart';
@@ -10,17 +11,23 @@ import 'package:pokepoke/core/services/pokemon_service.dart';
 class PokemonDetailSheet extends StatefulWidget {
   final PokemonEntry initialPokemon;
   final Map<String, Color> typeColors;
+  final void Function(String type)? onSelectType;
+  final void Function(PokemonEntry pokemon)? onPokemonIndexed;
 
   const PokemonDetailSheet({
     super.key,
     required this.initialPokemon,
     required this.typeColors,
+    this.onSelectType,
+    this.onPokemonIndexed,
   });
 
   static Future<void> show(
     BuildContext context, {
     required PokemonEntry pokemon,
     required Map<String, Color> typeColors,
+    void Function(String type)? onSelectType,
+    void Function(PokemonEntry pokemon)? onPokemonIndexed,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -29,6 +36,8 @@ class PokemonDetailSheet extends StatefulWidget {
       builder: (_) => PokemonDetailSheet(
         initialPokemon: pokemon,
         typeColors: typeColors,
+        onSelectType: onSelectType,
+        onPokemonIndexed: onPokemonIndexed,
       ),
     );
   }
@@ -64,9 +73,26 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
         _loadingEvolution = false;
       });
     }
+
+    // Background prefetch / cache any evolution nodes not yet indexed
+    if (chain.hasEvolution) {
+      for (final node in chain.nodes) {
+        if (node.id != _currentPokemon.id) {
+          final cached = CacheService.getCachedPokemon() ?? [];
+          final isCached = cached.any((m) => m['id'] == node.id);
+          if (!isCached) {
+            PokemonService.fetchSinglePokemon('${node.id}').then((entry) {
+              if (entry != null && mounted) {
+                widget.onPokemonIndexed?.call(entry);
+              }
+            });
+          }
+        }
+      }
+    }
   }
 
-  void _switchToPokemon(EvolutionNode node) {
+  Future<void> _switchToPokemon(EvolutionNode node) async {
     if (node.id == _currentPokemon.id) return;
 
     PokemonEntry? found;
@@ -85,16 +111,31 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
     }
 
     final species = getSpeciesData(node.id);
+    final fallbackEntry = PokemonEntry(
+      id: node.id,
+      name: node.name,
+      types: _currentPokemon.types,
+      height: species.height,
+      weight: species.weight,
+    );
+
     setState(() {
-      _currentPokemon = found ??
-          PokemonEntry(
-            id: node.id,
-            name: node.name,
-            types: _currentPokemon.types,
-            height: species.height,
-            weight: species.weight,
-          );
+      _currentPokemon = found ?? fallbackEntry;
     });
+
+    if (found == null) {
+      final fetched = await PokemonService.fetchSinglePokemon('${node.id}');
+      if (fetched != null && mounted) {
+        setState(() {
+          if (_currentPokemon.id == node.id) {
+            _currentPokemon = fetched;
+          }
+        });
+        widget.onPokemonIndexed?.call(fetched);
+      }
+    } else {
+      widget.onPokemonIndexed?.call(found);
+    }
   }
 
   @override
@@ -238,26 +279,40 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                   controller: scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   children: [
-                    // Type pills
+                    // Type pills (tap to filter in dashboard)
                     Wrap(
                       spacing: 8,
                       children: _currentPokemon.types.map((type) {
                         final color = _typeColor(type);
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: color, width: 1.2),
-                          ),
-                          child: Text(
-                            type.toUpperCase(),
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            widget.onSelectType?.call(type.toLowerCase());
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: color, width: 1.2),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  type.toUpperCase(),
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.filter_list,
+                                    size: 11, color: Colors.white70),
+                              ],
                             ),
                           ),
                         );
@@ -296,13 +351,23 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                               ),
                               child: FadeTransition(opacity: anim, child: child),
                             ),
-                            child: Image.network(
-                              _currentPokemon.spriteUrl,
+                            child: CachedNetworkImage(
                               key: ValueKey(_currentPokemon.id),
+                              imageUrl: _currentPokemon.spriteUrl,
                               width: 165,
                               height: 165,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, p0, p1) => const Icon(
+                              placeholder: (context, url) => const Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white24,
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => const Icon(
                                 Icons.catching_pokemon,
                                 color: Colors.white38,
                                 size: 80,
@@ -344,7 +409,7 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Dimensions Card (Height, Weight, Scale)
+                    // Dimensions Card (Height, Weight, Gender)
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -367,24 +432,27 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                             value: _currentPokemon.formattedWeight,
                           ),
                           Container(width: 1, height: 28, color: Colors.white12),
-                          _specItem(
-                            icon: Icons.female,
-                            label: 'GENDER RATIO',
-                            value: species.genderRatio,
-                          ),
+                          _buildGenderRatio(species.genderRatio),
                         ],
                       ),
                     ),
                     const SizedBox(height: 18),
 
                     // ─── Abilities Section ──────────────────────────────────
-                    Text(
-                      '⚡ ABILITIES',
-                      style: GoogleFonts.pressStart2p(
-                        color: Colors.white70,
-                        fontSize: 9,
-                        letterSpacing: 0.5,
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.flash_on,
+                            color: Color(0xFFFFD600), size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          'ABILITIES',
+                          style: GoogleFonts.pressStart2p(
+                            color: Colors.white70,
+                            fontSize: 9,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -437,14 +505,21 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                     ),
                     const SizedBox(height: 18),
 
-                    // ─── Weaknesses Section ─────────────────────────────────
-                    Text(
-                      '🛡️ WEAKNESSES (2× DAMAGE)',
-                      style: GoogleFonts.pressStart2p(
-                        color: Colors.white70,
-                        fontSize: 9,
-                        letterSpacing: 0.5,
-                      ),
+                    // ─── Weaknesses Section (tap to filter) ─────────────────
+                    Row(
+                      children: [
+                        const Icon(Icons.shield_outlined,
+                            color: Color(0xFFFF6B6B), size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          'WEAKNESSES (2× DAMAGE)',
+                          style: GoogleFonts.pressStart2p(
+                            color: Colors.white70,
+                            fontSize: 9,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -453,20 +528,35 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                       children: species.weaknesses.map((weakType) {
                         final typeKey = weakType.split(' ').first.toLowerCase();
                         final color = _typeColor(typeKey);
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: color.withValues(alpha: 0.6)),
-                          ),
-                          child: Text(
-                            weakType.toUpperCase(),
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            widget.onSelectType?.call(typeKey);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(6),
+                              border:
+                                  Border.all(color: color.withValues(alpha: 0.6)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  weakType.toUpperCase(),
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(width: 3),
+                                const Icon(Icons.filter_alt_outlined,
+                                    size: 9, color: Colors.white60),
+                              ],
                             ),
                           ),
                         );
@@ -475,13 +565,20 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                     const SizedBox(height: 20),
 
                     // ─── Evolution Chain Card ──────────────────────────────
-                    Text(
-                      '⚡ EVOLUTIONARY PATH',
-                      style: GoogleFonts.pressStart2p(
-                        color: const Color(0xFFFFCC00),
-                        fontSize: 9,
-                        letterSpacing: 0.5,
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.alt_route,
+                            color: Color(0xFFFFCC00), size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          'EVOLUTIONARY PATH',
+                          style: GoogleFonts.pressStart2p(
+                            color: const Color(0xFFFFCC00),
+                            fontSize: 9,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
 
@@ -538,13 +635,20 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                     const SizedBox(height: 20),
 
                     // ─── Base Combat Stats ─────────────────────────────────
-                    Text(
-                      '⚔️ BASE COMBAT STATS',
-                      style: GoogleFonts.pressStart2p(
-                        color: Colors.white70,
-                        fontSize: 9,
-                        letterSpacing: 0.5,
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.bar_chart,
+                            color: Color(0xFF4FC3F7), size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          'BASE COMBAT STATS',
+                          style: GoogleFonts.pressStart2p(
+                            color: Colors.white70,
+                            fontSize: 9,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
 
@@ -617,6 +721,102 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
     );
   }
 
+  Widget _buildGenderRatio(String rawRatio) {
+    if (rawRatio.toLowerCase().contains('genderless')) {
+      return Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.circle_outlined, size: 12, color: Colors.white38),
+              const SizedBox(width: 4),
+              Text(
+                'GENDER',
+                style: GoogleFonts.inter(
+                  color: Colors.white38,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Genderless',
+            style: GoogleFonts.inter(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      );
+    }
+
+    String malePercent = '';
+    String femalePercent = '';
+    final parts = rawRatio.split('/');
+    if (parts.length == 2) {
+      malePercent = parts[0].replaceAll(RegExp(r'[^0-9.]'), '');
+      femalePercent = parts[1].replaceAll(RegExp(r'[^0-9.]'), '');
+    }
+
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.transgender, size: 13, color: Colors.white38),
+            const SizedBox(width: 4),
+            Text(
+              'GENDER RATIO',
+              style: GoogleFonts.inter(
+                color: Colors.white38,
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (malePercent.isNotEmpty && femalePercent.isNotEmpty)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.male, size: 14, color: Color(0xFF4FC3F7)),
+              Text(
+                '$malePercent%',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF4FC3F7),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 5),
+              const Icon(Icons.female, size: 14, color: Color(0xFFF48FB1)),
+              Text(
+                '$femalePercent%',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFF48FB1),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          )
+        else
+          Text(
+            rawRatio,
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+      ],
+    );
+  }
+
   List<Widget> _buildEvolutionNodes(Color activeColor) {
     final widgets = <Widget>[];
     final nodes = _evolutionChain!.nodes;
@@ -644,12 +844,20 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
             ),
             child: Column(
               children: [
-                Image.network(
-                  node.spriteUrl,
+                CachedNetworkImage(
+                  imageUrl: node.spriteUrl,
                   width: 54,
                   height: 54,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, p0, p1) => const Icon(
+                  placeholder: (context, url) => const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: Colors.white24,
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => const Icon(
                     Icons.catching_pokemon,
                     size: 30,
                     color: Colors.white24,

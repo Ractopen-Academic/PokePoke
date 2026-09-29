@@ -140,30 +140,38 @@ class PokemonService {
         final height = (data['height'] as num?)?.toInt() ?? species.height;
         final weight = (data['weight'] as num?)?.toInt() ?? species.weight;
 
-        return PokemonEntry(
+        final entry = PokemonEntry(
           id: id,
           name: data['name'] as String,
           types: types,
           height: height,
           weight: weight,
         );
+        // Persist to cache
+        await CacheService.upsertPokemon(entry.toMap());
+        return entry;
       }
     } catch (_) {}
     return null;
   }
 
-  /// Fetch the next [_pageSize] Pokémon starting at [offset] (by Pokédex number).
-  /// Appends to the current cached list and returns the full updated list.
+  /// Fetch the next [count] Pokémon starting at [startId] or [offset] (by Pokédex number).
+  /// Appends to the current cached list and returns the full updated list sorted by ID.
   static Future<List<PokemonEntry>> fetchMore({
+    int? startId,
+    int? count,
     required int offset,
     required List<PokemonEntry> existing,
   }) async {
     final hasNet = await _hasNetwork();
     if (!hasNet) return existing;
 
-    // Fetch offset+1 to offset+pageSize (PokeAPI is 0-indexed, Pokédex is 1-indexed)
-    final futures = List.generate(_pageSize, (i) async {
-      final id = offset + i + 1; // IDs start at 1
+    final fetchCount = count ?? _pageSize;
+    final beginId = startId ?? (offset + 1);
+
+    // Fetch beginId to beginId + fetchCount - 1
+    final futures = List.generate(fetchCount, (i) async {
+      final id = beginId + i;
       if (id > 1025) return null; // Pokédex cap
       try {
         final res = await http
@@ -190,7 +198,6 @@ class PokemonService {
 
     final results = await Future.wait(futures);
     final newEntries = results.whereType<PokemonEntry>().toList();
-    newEntries.sort((a, b) => a.id.compareTo(b.id));
 
     // Merge: keep existing, add new (avoid duplicates by id)
     final existingIds = existing.map((e) => e.id).toSet();
@@ -198,6 +205,7 @@ class PokemonService {
       ...existing,
       ...newEntries.where((e) => !existingIds.contains(e.id)),
     ];
+    merged.sort((a, b) => a.id.compareTo(b.id));
 
     // Persist to cache
     await CacheService.savePokemon(merged.map((e) => e.toMap()).toList());

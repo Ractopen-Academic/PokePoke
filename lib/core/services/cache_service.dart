@@ -51,4 +51,39 @@ class CacheService {
         .difference(DateTime.fromMillisecondsSinceEpoch(ts));
     return age > _kCacheTTL;
   }
+
+  /// Upsert a single pokemon into the persistent cache
+  static Future<void> upsertPokemon(Map<String, dynamic> entry) async {
+    final list = getCachedPokemon() ?? [];
+    final id = entry['id'] as int;
+    final existingIndex = list.indexWhere((m) => m['id'] == id);
+    if (existingIndex >= 0) {
+      list[existingIndex] = entry;
+    } else {
+      list.add(entry);
+      list.sort((a, b) => (a['id'] as int).compareTo(b['id'] as int));
+    }
+    await savePokemon(list);
+  }
+
+  /// Save evolution chain data for a pokemon
+  static Future<void> saveEvolutionChain(
+      int pokemonId, Map<String, dynamic> chainData) async {
+    if (_prefs == null) return;
+    await _prefs!.setString(
+      'evo_chain_v1_$pokemonId',
+      jsonEncode(chainData),
+    );
+  }
+
+  /// Retrieve cached evolution chain data for a pokemon
+  static Map<String, dynamic>? getCachedEvolutionChain(int pokemonId) {
+    final raw = _prefs?.getString('evo_chain_v1_$pokemonId');
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
 }

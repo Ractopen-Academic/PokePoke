@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,12 +12,14 @@ class FavouriteScreen extends StatefulWidget {
   final List<PokemonEntry> allPokemon;
   final Map<String, Color> typeColors;
   final VoidCallback? onExplore;
+  final void Function(String type)? onSelectType;
 
   const FavouriteScreen({
     super.key,
     required this.allPokemon,
     required this.typeColors,
     this.onExplore,
+    this.onSelectType,
   });
 
   @override
@@ -165,11 +168,13 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
                               key: ValueKey(p.id),
                               pokemon: p,
                               typeColor: _typeColor,
+                              onSelectType: widget.onSelectType,
                               onTap: () {
                                 PokemonDetailSheet.show(
                                   context,
                                   pokemon: p,
                                   typeColors: widget.typeColors,
+                                  onSelectType: widget.onSelectType,
                                 );
                               },
                             );
@@ -262,12 +267,14 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
 class _FavouriteCard extends StatelessWidget {
   final PokemonEntry pokemon;
   final Color Function(String) typeColor;
+  final void Function(String type)? onSelectType;
   final VoidCallback onTap;
 
   const _FavouriteCard({
     super.key,
     required this.pokemon,
     required this.typeColor,
+    this.onSelectType,
     required this.onTap,
   });
 
@@ -319,26 +326,23 @@ class _FavouriteCard extends StatelessWidget {
               child: SizedBox(
                 width: p.spriteSize,
                 height: p.spriteSize,
-                child: Image.network(
-                  p.spriteUrl,
+                child: CachedNetworkImage(
+                  imageUrl: p.spriteUrl,
                   fit: BoxFit.contain,
                   alignment: Alignment.bottomRight,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return Shimmer.fromColors(
-                      baseColor: Colors.white12,
-                      highlightColor: Colors.white30,
-                      child: Container(
-                        width: p.spriteSize,
-                        height: p.spriteSize,
-                        decoration: const BoxDecoration(
-                          color: Colors.white12,
-                          shape: BoxShape.circle,
-                        ),
+                  placeholder: (context, url) => Shimmer.fromColors(
+                    baseColor: Colors.white12,
+                    highlightColor: Colors.white30,
+                    child: Container(
+                      width: p.spriteSize,
+                      height: p.spriteSize,
+                      decoration: const BoxDecoration(
+                        color: Colors.white12,
+                        shape: BoxShape.circle,
                       ),
-                    );
-                  },
-                  errorBuilder: (_, p0, p1) => Icon(
+                    ),
+                  ),
+                  errorWidget: (_, p0, p1) => Icon(
                     Icons.catching_pokemon,
                     color: Colors.white38,
                     size: p.spriteSize * 0.55,
@@ -398,19 +402,23 @@ class _FavouriteCard extends StatelessWidget {
                   Wrap(
                     spacing: 4,
                     children: p.types.map((t) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          t.toUpperCase(),
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onSelectType?.call(t),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            t.toUpperCase(),
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       );

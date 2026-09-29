@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:pokepoke/core/services/cache_service.dart';
 
 class EvolutionNode {
   final int id;
@@ -17,6 +18,18 @@ class EvolutionNode {
 
   String get spriteUrl =>
       'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$id.png';
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        if (trigger != null) 'trigger': trigger,
+      };
+
+  factory EvolutionNode.fromMap(Map<String, dynamic> m) => EvolutionNode(
+        id: m['id'] as int,
+        name: m['name'] as String,
+        trigger: m['trigger'] as String?,
+      );
 }
 
 class EvolutionChainData {
@@ -24,6 +37,17 @@ class EvolutionChainData {
   const EvolutionChainData({required this.nodes});
 
   bool get hasEvolution => nodes.length > 1;
+
+  Map<String, dynamic> toMap() => {
+        'nodes': nodes.map((n) => n.toMap()).toList(),
+      };
+
+  factory EvolutionChainData.fromMap(Map<String, dynamic> m) =>
+      EvolutionChainData(
+        nodes: (m['nodes'] as List)
+            .map((e) => EvolutionNode.fromMap(e as Map<String, dynamic>))
+            .toList(),
+      );
 }
 
 class EvolutionService {
@@ -166,6 +190,16 @@ class EvolutionService {
       return data;
     }
 
+    // Check persistent disk cache
+    final cachedData = CacheService.getCachedEvolutionChain(pokemonId);
+    if (cachedData != null) {
+      try {
+        final parsed = EvolutionChainData.fromMap(cachedData);
+        _cache[pokemonId] = parsed;
+        return parsed;
+      } catch (_) {}
+    }
+
     // Attempt PokeAPI fetch
     try {
       final speciesRes = await http.get(
@@ -190,6 +224,12 @@ class EvolutionService {
             if (nodes.isNotEmpty) {
               final result = EvolutionChainData(nodes: nodes);
               _cache[pokemonId] = result;
+              // Persist chain for this id and all related nodes
+              final map = result.toMap();
+              for (final node in nodes) {
+                _cache[node.id] = result;
+                await CacheService.saveEvolutionChain(node.id, map);
+              }
               return result;
             }
           }
