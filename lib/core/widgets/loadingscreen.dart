@@ -429,7 +429,7 @@ class _ParticlePainter extends CustomPainter {
     }
 
     // Big subtle orbs (red + purple)
-    final wave = (t * 2 * 3.14159).sin();
+    final wave = sin(t * 2 * pi);
     for (final (dx, dy, r, color) in [
       (0.2, 0.25, 140.0, const Color(0xFFFF1C1C)),
       (0.8, 0.65, 110.0, const Color(0xFF7C4DFF)),
@@ -445,11 +445,4 @@ class _ParticlePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ParticlePainter old) => old.t != t;
-}
-
-extension on double {
-  double sin() => _sin(this);
-  double _sin(double x) => (x % (2 * 3.14159)) < 3.14159
-      ? 1 - ((x % (2 * 3.14159)) / 3.14159 - 1).abs() * 2
-      : ((x % (2 * 3.14159)) / 3.14159 - 2).abs() * 2 - 1;
 }

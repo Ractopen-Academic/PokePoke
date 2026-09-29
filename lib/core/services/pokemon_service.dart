@@ -104,9 +104,9 @@ class PokemonService {
     List<PokemonEntry> result = List.from(kBuiltInPokemon);
     onStatus?.call('Built-in Pokédex loaded (${result.length} Pokémon)');
 
-    // Overlay with cache if we have more
+    // Overlay with cache if present
     final cached = CacheService.getCachedPokemon();
-    if (cached != null && cached.length > result.length) {
+    if (cached != null && cached.isNotEmpty) {
       result = cached.map(PokemonEntry.fromMap).toList();
       onStatus?.call('Cache loaded (${result.length} Pokémon)');
     }
@@ -210,7 +210,15 @@ class PokemonService {
       if (!hasNet) return;
       try {
         final fresh = await _fetchFirstPage();
-        await CacheService.savePokemon(fresh.map((e) => e.toMap()).toList());
+        if (fresh.isEmpty) return;
+        final current = CacheService.getCachedPokemon() ?? [];
+        final currentEntries = current.map(PokemonEntry.fromMap).toList();
+        final freshIds = fresh.map((e) => e.id).toSet();
+        final combined = [
+          ...fresh,
+          ...currentEntries.where((e) => !freshIds.contains(e.id)),
+        ]..sort((a, b) => a.id.compareTo(b.id));
+        await CacheService.savePokemon(combined.map((e) => e.toMap()).toList());
       } catch (_) {}
     });
   }

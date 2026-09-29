@@ -566,14 +566,17 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       itemCount: itemCount,
       itemBuilder: (_, i) {
-        // Last item = load-more footer (spans 2 cols via a trick with 1-col grid overlay isn't needed — just show in last slot)
         if (i == _filtered.length) {
           return _buildLoadMoreTile();
         }
-        return FadeInUp(
-          delay: Duration(milliseconds: (i % 8) * 50),
-          duration: const Duration(milliseconds: 350),
-          child: _PokemonCard(pokemon: _filtered[i]),
+        final p = _filtered[i];
+        return FadeIn(
+          key: ValueKey(p.id),
+          duration: const Duration(milliseconds: 250),
+          child: _PokemonCard(
+            key: ValueKey(p.id),
+            pokemon: p,
+          ),
         );
       },
     );
@@ -750,7 +753,7 @@ class _HomeScreenState extends State<HomeScreen>
 // ─── Pokemon Card ─────────────────────────────────────────────────────────────
 class _PokemonCard extends StatefulWidget {
   final PokemonEntry pokemon;
-  const _PokemonCard({required this.pokemon});
+  const _PokemonCard({super.key, required this.pokemon});
 
   @override
   State<_PokemonCard> createState() => _PokemonCardState();

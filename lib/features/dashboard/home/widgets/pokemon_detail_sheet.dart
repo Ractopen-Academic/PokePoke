@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pokepoke/core/data/pokemon_seed.dart';
 import 'package:pokepoke/core/data/pokemon_species_data.dart';
+import 'package:pokepoke/core/services/cache_service.dart';
 import 'package:pokepoke/core/services/evolution_service.dart';
 import 'package:pokepoke/core/services/favourite_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
@@ -66,15 +68,32 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
 
   void _switchToPokemon(EvolutionNode node) {
     if (node.id == _currentPokemon.id) return;
+
+    PokemonEntry? found;
+    final cached = CacheService.getCachedPokemon();
+    if (cached != null) {
+      final match = cached.where((m) => m['id'] == node.id).firstOrNull;
+      if (match != null) {
+        found = PokemonEntry.fromMap(match);
+      }
+    }
+    if (found == null) {
+      final seed = kPokemonSeed.where((m) => m['id'] == node.id).firstOrNull;
+      if (seed != null) {
+        found = PokemonEntry.fromMap(seed);
+      }
+    }
+
     final species = getSpeciesData(node.id);
     setState(() {
-      _currentPokemon = PokemonEntry(
-        id: node.id,
-        name: node.name,
-        types: _currentPokemon.types,
-        height: species.height,
-        weight: species.weight,
-      );
+      _currentPokemon = found ??
+          PokemonEntry(
+            id: node.id,
+            name: node.name,
+            types: _currentPokemon.types,
+            height: species.height,
+            weight: species.weight,
+          );
     });
   }
 
@@ -252,7 +271,8 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                         alignment: Alignment.center,
                         children: [
                           // Background radial glow
-                          Container(
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
                             width: 180,
                             height: 180,
                             decoration: BoxDecoration(
@@ -266,16 +286,27 @@ class _PokemonDetailSheetState extends State<PokemonDetailSheet> {
                               ),
                             ),
                           ),
-                          // Pokémon Sprite
-                          Image.network(
-                            _currentPokemon.spriteUrl,
-                            width: 165,
-                            height: 165,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, p0, p1) => const Icon(
-                              Icons.catching_pokemon,
-                              color: Colors.white38,
-                              size: 80,
+                          // Pokémon Sprite with smooth scale & fade transition
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 350),
+                            transitionBuilder: (child, anim) => ScaleTransition(
+                              scale: CurvedAnimation(
+                                parent: anim,
+                                curve: Curves.easeOutBack,
+                              ),
+                              child: FadeTransition(opacity: anim, child: child),
+                            ),
+                            child: Image.network(
+                              _currentPokemon.spriteUrl,
+                              key: ValueKey(_currentPokemon.id),
+                              width: 165,
+                              height: 165,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, p0, p1) => const Icon(
+                                Icons.catching_pokemon,
+                                color: Colors.white38,
+                                size: 80,
+                              ),
                             ),
                           ),
                         ],

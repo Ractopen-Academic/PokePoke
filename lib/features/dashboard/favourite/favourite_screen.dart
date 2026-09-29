@@ -162,6 +162,7 @@ class _FavouriteScreenState extends State<FavouriteScreen> {
                           itemBuilder: (context, i) {
                             final p = filtered[i];
                             return _FavouriteCard(
+                              key: ValueKey(p.id),
                               pokemon: p,
                               typeColor: _typeColor,
                               onTap: () {
@@ -264,6 +265,7 @@ class _FavouriteCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _FavouriteCard({
+    super.key,
     required this.pokemon,
     required this.typeColor,
     required this.onTap,
