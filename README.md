@@ -103,6 +103,7 @@ pokepoke/
 │   │   │   ├── favourite_service.dart   # Reactive favourite state notifier and storage
 │   │   │   └── pokemon_service.dart     # PokéAPI client and height-based sprite scaling
 │   │   └── widgets/
+│   │       ├── hold_to_spam_button.dart # Reusable auto-fire hold-to-spam button
 │   │       ├── loadingscreen.dart       # Splash screen with competitive trainer tips
 │   │       └── loading_screen/
 │   │           └── loading_screen.dart  # Continuous spinning vector indicator
@@ -125,6 +126,7 @@ pokepoke/
 │   ├── widget_test.dart                 # Size scaling boundary and calculation tests
 │   ├── favourite_test.dart              # Favourites service and persistence tests
 │   ├── battle_pen_test.dart             # Safari Pen capacity, XP, and auto-evolution tests
+│   ├── hold_to_spam_test.dart           # Hold-to-spam rapid triggering tests
 │   └── pokemon_index_cache_test.dart    # Evolution tree parsing and persistent cache tests
 ├── pubspec.yaml                         # Dependency definitions and asset configuration
 └── gituser.md                           # Team attribution and contributor quotas
@@ -153,6 +155,7 @@ pokepoke/
 
 ### 5. PokéWalk Arena (`BattleScreen`)
 - Mystery walking simulator where the required step target is hidden (random 10–50 steps).
+- **Hold-to-Walk Auto-Fire**: Press and hold the "HOLD TO WALK (+1)" button to rapidly step through the tall grass without repeated tapping.
 - Real-time tall-grass radar scanner displays distance signals (Quiet → Rustling → Signals Detected → Pokémon Nearby).
 - Integrates real physical step tracking via device motion sensors (`Pedometer`) with user permission request dialog.
 - Wild Pokémon roams and spreads dynamically across the arena grid.
@@ -161,6 +164,7 @@ pokepoke/
 
 ### 6. Safari Pen & Roaming Sanctuary (`ProfileSafariScreen`)
 - **Interactive Roaming Meadow**: All caught Pokémon wander and roam freely across an animated green meadow habitat.
+- **Hold-to-Spam Training**: Press and hold any "+25 XP" training button to continuously spam training, level up, and trigger auto-evolutions smoothly.
 - Tapping any roaming Pokémon in the meadow reveals a quick training popover.
 - **Quick Inventory Sheet**: Clicking the **"X / 20 SLOTS"** badge opens a modal bottom sheet listing all caught Pokémon.
 - Trainers can train (+25 XP) to level up and trigger auto-evolution celebrations once level requirements are met, or release Pokémon back into the wild to free up pen slots.

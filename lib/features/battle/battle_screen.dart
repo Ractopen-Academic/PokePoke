@@ -7,14 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:neopop/widgets/buttons/neopop_tilted_button/neopop_tilted_button.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:pokepoke/core/services/audio_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
+import 'package:pokepoke/core/widgets/hold_to_spam_button.dart';
 import 'package:pokepoke/features/battle/data/battle_pen_service.dart';
 import 'package:pokepoke/features/battle/data/caught_pokemon.dart';
-import 'package:shimmer/shimmer.dart';
 
 class BattleScreen extends StatefulWidget {
   final List<PokemonEntry> allPokemon;
@@ -30,297 +29,193 @@ class BattleScreen extends StatefulWidget {
   State<BattleScreen> createState() => _BattleScreenState();
 }
 
-class _BattleScreenState extends State<BattleScreen>
-    with TickerProviderStateMixin {
+class _BattleScreenState extends State<BattleScreen> {
   final Random _rng = Random();
 
-  // Walking state (Target distance is SECRET/HIDDEN from the user)
+  // Walking state (Target is secret/concealed from user)
   int _currentSteps = 0;
-  late int _targetSteps; // 10 to 50 random steps, hidden from UI
-  int _sessionStepsWalked = 0;
+  late int _targetSteps;
+  int _sessionSteps = 0;
 
-  // Real pedometer sensor state
-  bool _pedometerEnabled = false;
-  int? _lastHardwareStepCount;
-  StreamSubscription<StepCount>? _stepSubscription;
-  String _sensorStatusMessage = 'Sensor Off';
+  // Pedometer sensor
+  bool _pedometerActive = false;
+  int? _initialSteps;
+  StreamSubscription<StepCount>? _stepSub;
+  String _sensorLabel = 'SENSOR OFF';
 
-  // Wild Pokémon encounter state
+  // Encounter state
   PokemonEntry? _wildPokemon;
   Timer? _roamTimer;
-  Alignment _roamAlignment = Alignment.center;
-  int _tapCount = 0; // requires 2 taps to catch
+  Alignment _wildPos = Alignment.center;
+  int _tapCount = 0;
   bool _isCapturing = false;
-  bool _showHitFlash = false;
-
-  // Walking visual simulation controllers
-  late AnimationController _walkAnimController;
-  late AnimationController _radarScanController;
+  bool _hitFlash = false;
 
   @override
   void initState() {
     super.initState();
-    _resetSecretTarget();
-
-    _walkAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-
-    _radarScanController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    )..repeat();
-
-    // Auto-start safari music if not muted
+    _resetTarget();
     SafariAudioService.playBgm();
   }
 
   @override
   void dispose() {
-    _stepSubscription?.cancel();
+    _stepSub?.cancel();
     _roamTimer?.cancel();
-    _walkAnimController.dispose();
-    _radarScanController.dispose();
     super.dispose();
   }
 
-  void _resetSecretTarget() {
-    // Secret range 10 to 50 steps
-    _targetSteps = 10 + _rng.nextInt(41);
+  void _resetTarget() {
+    _targetSteps = 10 + _rng.nextInt(41); // Secret 10-50 steps
     _currentSteps = 0;
   }
 
-  // Request user permission for real hardware pedometer step detection
-  Future<void> _promptAndEnablePedometer() async {
+  Future<void> _togglePedometer() async {
     if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Hardware step sensors are not available on Web. Use the Walk simulator button!',
-            style: GoogleFonts.inter(),
-          ),
-          backgroundColor: const Color(0xFF262640),
-        ),
-      );
+      _showToast('Sensors not supported on Web. Use Hold-to-Walk!');
       return;
     }
 
-    if (_pedometerEnabled) {
-      await _stepSubscription?.cancel();
+    if (_pedometerActive) {
+      await _stepSub?.cancel();
       setState(() {
-        _pedometerEnabled = false;
-        _sensorStatusMessage = 'Sensor Off';
+        _pedometerActive = false;
+        _sensorLabel = 'SENSOR OFF';
       });
       return;
     }
 
-    // Ask user permission
-    final confirm = await showDialog<bool>(
+    final granted = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1C1C30),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: Color(0xFF00E676), width: 1.2),
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF00E676)),
         ),
-        title: Row(
-          children: [
-            const Icon(Icons.directions_walk, color: Color(0xFF00E676), size: 24),
-            const SizedBox(width: 8),
-            Text(
-              'REAL STEP TRACKER',
-              style: GoogleFonts.pressStart2p(color: const Color(0xFF00E676), fontSize: 11),
-            ),
-          ],
+        title: Text(
+          'PEDOMETER ACCESS',
+          style: GoogleFonts.pressStart2p(color: const Color(0xFF00E676), fontSize: 11),
         ),
         content: Text(
-          'Allow PokéPoke to access your physical activity sensors? Every real step you take will advance your Pokémon exploration (+1 step)!',
-          style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
+          'Allow physical step tracking? Real steps will advance your PokéWalk exploration (+1 step)!',
+          style: GoogleFonts.inter(color: Colors.white70, fontSize: 13),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('NOT NOW', style: GoogleFonts.inter(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(
-              'GRANT PERMISSION',
-              style: GoogleFonts.inter(
-                color: const Color(0xFF00E676),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('CANCEL')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('ALLOW')),
         ],
       ),
     );
 
-    if (confirm != true) return;
+    if (granted != true) return;
 
-    try {
-      final status = await Permission.activityRecognition.request();
-      if (!mounted) return;
-
-      if (status.isGranted) {
-        _startListeningToPedometer();
-      } else {
-        setState(() {
-          _sensorStatusMessage = 'Permission Denied';
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Activity recognition permission was not granted.',
-                style: GoogleFonts.inter(),
-              ),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error requesting activity permission: $e');
-    }
-  }
-
-  void _startListeningToPedometer() {
-    try {
-      _stepSubscription = Pedometer.stepCountStream.listen(
-        (StepCount event) {
-          if (!mounted) return;
-          if (_lastHardwareStepCount == null) {
-            _lastHardwareStepCount = event.steps;
-            setState(() {
-              _pedometerEnabled = true;
-              _sensorStatusMessage = 'Sensor Active';
-            });
-            return;
-          }
-
-          final delta = event.steps - _lastHardwareStepCount!;
-          if (delta > 0) {
-            _lastHardwareStepCount = event.steps;
-            for (int i = 0; i < delta; i++) {
-              _stepForward(isRealStep: true);
-            }
-          }
-        },
-        onError: (err) {
-          if (!mounted) return;
-          setState(() {
-            _pedometerEnabled = false;
-            _sensorStatusMessage = 'Sensor Unavailable';
-          });
-        },
-        cancelOnError: true,
-      );
-
-      setState(() {
-        _pedometerEnabled = true;
-        _sensorStatusMessage = 'Sensor Active';
-      });
-    } catch (e) {
-      setState(() {
-        _pedometerEnabled = false;
-        _sensorStatusMessage = 'Sensor Error';
-      });
-    }
-  }
-
-  void _stepForward({bool isRealStep = false}) {
-    if (_wildPokemon != null || _isCapturing) return;
-
-    if (!isRealStep) {
-      HapticFeedback.lightImpact();
-    }
-    _walkAnimController.forward(from: 0.0);
-
-    setState(() {
-      _currentSteps += 1;
-      _sessionStepsWalked += 1;
-
-      if (_currentSteps >= _targetSteps) {
-        _triggerWildEncounter();
-      }
-    });
-  }
-
-  void _triggerWildEncounter() {
-    final pool = widget.allPokemon.isNotEmpty ? widget.allPokemon : kBuiltInPokemon;
-    final randomMon = pool[_rng.nextInt(pool.length)];
-
-    setState(() {
-      _wildPokemon = randomMon;
-      _tapCount = 0;
-      _roamAlignment = Alignment.center;
-      _isCapturing = false;
-    });
-
-    _startRoamingTimer();
-  }
-
-  void _startRoamingTimer() {
-    _roamTimer?.cancel();
-    _roamTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
-      if (!mounted || _wildPokemon == null || _isCapturing) return;
-      setState(() {
-        final dx = (_rng.nextDouble() * 1.5) - 0.75;
-        final dy = (_rng.nextDouble() * 1.5) - 0.75;
-        _roamAlignment = Alignment(dx, dy);
-      });
-    });
-  }
-
-  Future<void> _handlePokemonTapped() async {
-    if (_wildPokemon == null || _isCapturing) return;
-
-    HapticFeedback.mediumImpact();
-
-    setState(() {
-      _tapCount += 1;
-      _showHitFlash = true;
-    });
-
-    Future.delayed(const Duration(milliseconds: 250), () {
-      if (mounted) setState(() => _showHitFlash = false);
-    });
-
-    if (_tapCount < 2) {
-      return; // 1 more tap needed!
-    }
-
-    _roamTimer?.cancel();
-    setState(() {
-      _isCapturing = true;
-    });
-
-    final caughtMon = _wildPokemon!;
-    final penFull = BattlePenService.penNotifier.value.length >= BattlePenService.maxCapacity;
-
-    if (penFull) {
-      _showPenFullDialog(caughtMon);
+    final status = await Permission.activityRecognition.request();
+    if (!status.isGranted) {
+      _showToast('Activity permission denied');
       return;
     }
 
-    final success = await BattlePenService.addCaughtPokemon(caughtMon);
-
-    if (!mounted) return;
-
-    if (success) {
-      _showCaughtDialog(caughtMon);
-    }
+    try {
+      _stepSub = Pedometer.stepCountStream.listen(
+        (event) {
+          if (!mounted) return;
+          if (_initialSteps == null) {
+            _initialSteps = event.steps;
+            setState(() {
+              _pedometerActive = true;
+              _sensorLabel = 'SENSOR ON';
+            });
+            return;
+          }
+          final delta = event.steps - _initialSteps!;
+          if (delta > 0) {
+            _initialSteps = event.steps;
+            for (int i = 0; i < delta; i++) {
+              _stepForward();
+            }
+          }
+        },
+        onError: (_) => setState(() {
+          _pedometerActive = false;
+          _sensorLabel = 'UNAVAILABLE';
+        }),
+      );
+      setState(() {
+        _pedometerActive = true;
+        _sensorLabel = 'SENSOR ON';
+      });
+    } catch (_) {}
   }
 
-  void _fleeEncounter() {
+  void _stepForward() {
+    if (_wildPokemon != null || _isCapturing) return;
+
+    setState(() {
+      _currentSteps++;
+      _sessionSteps++;
+      if (_currentSteps >= _targetSteps) {
+        _startEncounter();
+      }
+    });
+  }
+
+  void _startEncounter() {
+    final pool = widget.allPokemon.isNotEmpty ? widget.allPokemon : kBuiltInPokemon;
+    setState(() {
+      _wildPokemon = pool[_rng.nextInt(pool.length)];
+      _tapCount = 0;
+      _wildPos = Alignment.center;
+      _isCapturing = false;
+    });
+
+    _roamTimer?.cancel();
+    _roamTimer = Timer.periodic(const Duration(milliseconds: 1100), (_) {
+      if (!mounted || _wildPokemon == null || _isCapturing) return;
+      setState(() {
+        _wildPos = Alignment((_rng.nextDouble() * 1.5) - 0.75, (_rng.nextDouble() * 1.5) - 0.75);
+      });
+    });
+  }
+
+  Future<void> _tapPokemon() async {
+    if (_wildPokemon == null || _isCapturing) return;
+
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _tapCount++;
+      _hitFlash = true;
+    });
+
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) setState(() => _hitFlash = false);
+    });
+
+    if (_tapCount < 2) return;
+
+    // 2nd Tap -> Capture!
+    _roamTimer?.cancel();
+    setState(() => _isCapturing = true);
+
+    final mon = _wildPokemon!;
+    final full = BattlePenService.penNotifier.value.length >= BattlePenService.maxCapacity;
+
+    if (full) {
+      _showPenFullDialog(mon);
+      return;
+    }
+
+    final ok = await BattlePenService.addCaughtPokemon(mon);
+    if (mounted && ok) _showCaughtDialog(mon);
+  }
+
+  void _flee() {
     _roamTimer?.cancel();
     setState(() {
       _wildPokemon = null;
       _tapCount = 0;
       _isCapturing = false;
-      _resetSecretTarget();
+      _resetTarget();
     });
   }
 
@@ -330,46 +225,14 @@ class _BattleScreenState extends State<BattleScreen>
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E34),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: Colors.redAccent, width: 1.5),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
-            const SizedBox(width: 8),
-            Text(
-              'SAFARI PEN FULL',
-              style: GoogleFonts.pressStart2p(color: Colors.redAccent, fontSize: 11),
-            ),
-          ],
-        ),
-        content: Text(
-          'Your Safari Pen is at max capacity (${BattlePenService.maxCapacity}/${BattlePenService.maxCapacity}). Release a Pokémon in your Safari Pen to catch ${mon.name.toUpperCase()}.',
-          style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, height: 1.4),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('PEN FULL (20/20)', style: GoogleFonts.pressStart2p(color: Colors.redAccent, fontSize: 11)),
+        content: Text('Your Safari Pen is at max capacity! Release some Pokémon to catch ${mon.displayName}.',
+            style: GoogleFonts.inter(color: Colors.white70, fontSize: 12)),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _fleeEncounter();
-            },
-            child: Text('RELEASE WILD', style: GoogleFonts.inter(color: Colors.white54)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _fleeEncounter();
-              widget.onGoToSafari?.call();
-            },
-            child: Text(
-              'GO TO SAFARI PEN',
-              style: GoogleFonts.inter(
-                color: const Color(0xFF4FC3F7),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
+          TextButton(onPressed: () { Navigator.pop(ctx); _flee(); }, child: const Text('RELEASE WILD')),
+          TextButton(onPressed: () { Navigator.pop(ctx); _flee(); widget.onGoToSafari?.call(); },
+              child: const Text('GO TO PEN', style: TextStyle(color: Color(0xFF4FC3F7)))),
         ],
       ),
     );
@@ -387,88 +250,50 @@ class _BattleScreenState extends State<BattleScreen>
         ),
         title: Row(
           children: [
-            const Icon(Icons.catching_pokemon, color: Color(0xFFFFCC00), size: 24),
+            const Icon(Icons.catching_pokemon, color: Color(0xFFFFCC00), size: 22),
             const SizedBox(width: 8),
-            Text(
-              'GOTCHA!',
-              style: GoogleFonts.pressStart2p(color: const Color(0xFFFFCC00), fontSize: 13),
-            ),
+            Text('GOTCHA!', style: GoogleFonts.pressStart2p(color: const Color(0xFFFFCC00), fontSize: 13)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CachedNetworkImage(
-              imageUrl: mon.spriteUrl,
-              width: 110,
-              height: 110,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '${mon.name.toUpperCase()} was caught!',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Added to your Safari Pen (${BattlePenService.penNotifier.value.length}/${BattlePenService.maxCapacity}). Click the Slots button to train or inspect!',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: Colors.white70,
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
+            CachedNetworkImage(imageUrl: mon.spriteUrl, width: 100, height: 100).animate().scale(duration: 300.ms),
+            const SizedBox(height: 8),
+            Text('${mon.displayName} caught!', style: GoogleFonts.inter(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('Added to Safari Pen (${BattlePenService.penNotifier.value.length}/20).',
+                style: GoogleFonts.inter(color: Colors.white60, fontSize: 11)),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _fleeEncounter();
-            },
-            child: Text(
-              'KEEP WALKING',
-              style: GoogleFonts.pressStart2p(color: Colors.white60, fontSize: 8),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _fleeEncounter();
-              widget.onGoToSafari?.call();
-            },
-            child: Text(
-              'VIEW IN PEN',
-              style: GoogleFonts.pressStart2p(color: const Color(0xFFFFCC00), fontSize: 8),
-            ),
-          ),
+          TextButton(onPressed: () { Navigator.pop(ctx); _flee(); }, child: const Text('KEEP WALKING')),
+          TextButton(onPressed: () { Navigator.pop(ctx); _flee(); widget.onGoToSafari?.call(); },
+              child: const Text('VIEW IN PEN', style: TextStyle(color: Color(0xFFFFCC00)))),
         ],
       ),
     );
   }
 
-  // Mystery signal level based on secret progress (WITHOUT revealing target steps)
-  String get _mysterySignalLabel {
-    if (_wildPokemon != null) return 'ENCOUNTER ACTIVE!';
-    final ratio = (_currentSteps / _targetSteps).clamp(0.0, 1.0);
-    if (ratio < 0.25) return 'TALL GRASS: QUIET';
-    if (ratio < 0.55) return 'TALL GRASS: RUSTLING...';
-    if (ratio < 0.85) return 'SIGNALS DETECTED NEARBY!';
-    return 'WILD POKÉMON VERY CLOSE!';
+  void _showToast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: 2.seconds));
   }
 
-  Color get _mysterySignalColor {
+  String get _radarLabel {
+    if (_wildPokemon != null) return 'ENCOUNTER ACTIVE!';
+    final r = (_currentSteps / _targetSteps).clamp(0.0, 1.0);
+    if (r < 0.25) return 'TALL GRASS: QUIET';
+    if (r < 0.55) return 'TALL GRASS: RUSTLING...';
+    if (r < 0.85) return 'SIGNALS NEARBY!';
+    return 'POKÉMON VERY CLOSE!';
+  }
+
+  Color get _radarColor {
     if (_wildPokemon != null) return const Color(0xFFFFCC00);
-    final ratio = (_currentSteps / _targetSteps).clamp(0.0, 1.0);
-    if (ratio < 0.25) return Colors.white38;
-    if (ratio < 0.55) return const Color(0xFF81C784);
-    if (ratio < 0.85) return const Color(0xFFFFB74D);
+    final r = (_currentSteps / _targetSteps).clamp(0.0, 1.0);
+    if (r < 0.25) return Colors.white38;
+    if (r < 0.55) return const Color(0xFF81C784);
+    if (r < 0.85) return const Color(0xFFFFB74D);
     return const Color(0xFFFF5252);
   }
 
@@ -477,11 +302,9 @@ class _BattleScreenState extends State<BattleScreen>
     return Column(
       children: [
         _buildHeader(),
-        _buildSimulatedMysteryRadarCard(),
+        _buildRadarCard(),
         Expanded(
-          child: _wildPokemon != null
-              ? _buildWildEncounterField()
-              : _buildSimulatedWalkingMeadow(),
+          child: _wildPokemon != null ? _buildArena() : _buildWalkMeadow(),
         ),
       ],
     );
@@ -489,103 +312,59 @@ class _BattleScreenState extends State<BattleScreen>
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
       child: Row(
         children: [
           const Icon(Icons.directions_walk, color: Color(0xFF00E676), size: 24),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'POKÉWALK',
-                style: GoogleFonts.pressStart2p(
-                  color: Colors.white,
-                  fontSize: 13,
-                  letterSpacing: 0.5,
-                ),
-              ),
+              Text('POKÉWALK', style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 13)),
               const SizedBox(height: 2),
-              Text(
-                'Walk or Simulate to Find Wild Pokémon',
-                style: GoogleFonts.inter(color: Colors.white38, fontSize: 10),
-              ),
+              Text('Hold to Walk or Move Physically', style: GoogleFonts.inter(color: Colors.white38, fontSize: 10)),
             ],
           ),
           const Spacer(),
-
-          // Sound Toggle Button
+          // Audio mute/unmute
           ValueListenableBuilder<bool>(
             valueListenable: SafariAudioService.isMusicMuted,
-            builder: (context, isMuted, _) {
-              return GestureDetector(
-                onTap: () => SafariAudioService.toggleMusic(),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isMuted ? Colors.white24 : const Color(0xFFFFCC00),
-                    ),
-                  ),
-                  child: Icon(
-                    isMuted ? Icons.volume_off : Icons.volume_up,
-                    size: 16,
-                    color: isMuted ? Colors.white38 : const Color(0xFFFFCC00),
-                  ),
-                ),
-              );
-            },
+            builder: (_, muted, child) => IconButton(
+              icon: Icon(muted ? Icons.volume_off : Icons.volume_up,
+                  size: 20, color: muted ? Colors.white38 : const Color(0xFFFFCC00)),
+              onPressed: () => SafariAudioService.toggleMusic(),
+            ),
           ),
-          const SizedBox(width: 8),
-
-          // Button to Safari Pen
+          // Pen slots shortcut
           ValueListenableBuilder<List<CaughtPokemon>>(
             valueListenable: BattlePenService.penNotifier,
-            builder: (context, penList, _) {
-              return GestureDetector(
-                onTap: widget.onGoToSafari,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4FC3F7).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFF4FC3F7).withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.pets, size: 14, color: Color(0xFF4FC3F7)),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${penList.length}/20 SLOTS',
-                        style: GoogleFonts.pressStart2p(
-                          color: const Color(0xFF4FC3F7),
-                          fontSize: 8,
-                        ),
-                      ),
-                    ],
-                  ),
+            builder: (_, list, child) => GestureDetector(
+              onTap: widget.onGoToSafari,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4FC3F7).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF4FC3F7).withValues(alpha: 0.4)),
                 ),
-              );
-            },
+                child: Text('${list.length}/20 PEN',
+                    style: GoogleFonts.pressStart2p(color: const Color(0xFF4FC3F7), fontSize: 8)),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // FAKE VISUAL SIMULATION & RADAR CARD (exact steps needed is hidden!)
-  Widget _buildSimulatedMysteryRadarCard() {
+  Widget _buildRadarCard() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: const Color(0xFF1E1E34),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: Colors.white12),
         ),
         child: Column(
@@ -595,113 +374,51 @@ class _BattleScreenState extends State<BattleScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.radar, size: 16, color: _mysterySignalColor),
+                    Icon(Icons.radar, size: 15, color: _radarColor)
+                        .animate(onPlay: (c) => c.repeat())
+                        .scale(begin: const Offset(0.9, 0.9), end: const Offset(1.15, 1.15), duration: 1200.ms),
                     const SizedBox(width: 6),
-                    Text(
-                      _mysterySignalLabel,
-                      style: GoogleFonts.pressStart2p(
-                        color: _mysterySignalColor,
-                        fontSize: 8.5,
-                      ),
-                    ),
+                    Text(_radarLabel, style: GoogleFonts.pressStart2p(color: _radarColor, fontSize: 8)),
                   ],
                 ),
-                // Pedometer hardware sensor toggle
                 GestureDetector(
-                  onTap: _promptAndEnablePedometer,
+                  onTap: _togglePedometer,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color: _pedometerEnabled
-                          ? const Color(0xFF00E676).withValues(alpha: 0.2)
-                          : Colors.white10,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _pedometerEnabled
-                            ? const Color(0xFF00E676)
-                            : Colors.white24,
-                      ),
+                      color: _pedometerActive ? const Color(0xFF00E676).withValues(alpha: 0.2) : Colors.white10,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: _pedometerActive ? const Color(0xFF00E676) : Colors.white24),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _pedometerEnabled
-                              ? Icons.sensors
-                              : Icons.sensors_off_outlined,
-                          size: 12,
-                          color: _pedometerEnabled
-                              ? const Color(0xFF00E676)
-                              : Colors.white38,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _sensorStatusMessage.toUpperCase(),
-                          style: GoogleFonts.inter(
-                            color: _pedometerEnabled
-                                ? const Color(0xFF00E676)
-                                : Colors.white54,
+                    child: Text(_sensorLabel,
+                        style: GoogleFonts.inter(
+                            color: _pedometerActive ? const Color(0xFF00E676) : Colors.white54,
                             fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
+                            fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-
-            // Animated fake radar simulation wave
-            AnimatedBuilder(
-              animation: _radarScanController,
-              builder: (context, _) {
-                return Stack(
-                  children: [
-                    Container(
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: Colors.white10,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: (_radarScanController.value).clamp(0.05, 1.0),
-                      child: Container(
-                        height: 8,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              _mysterySignalColor.withValues(alpha: 0.1),
-                              _mysterySignalColor,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
             const SizedBox(height: 8),
-
+            // Simulated radar scan wave
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Container(
+                height: 6,
+                color: Colors.white10,
+                child: LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(_radarColor),
+                ).animate(onPlay: (c) => c.repeat()).shimmer(duration: 1500.ms),
+              ),
+            ),
+            const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Mystery Encounter: Walking…',
-                  style: GoogleFonts.inter(color: Colors.white38, fontSize: 10),
-                ),
-                Text(
-                  'Steps Walked: $_sessionStepsWalked',
-                  style: GoogleFonts.inter(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                Text('Hold button to auto-walk!', style: GoogleFonts.inter(color: Colors.white38, fontSize: 9.5)),
+                Text('Steps: $_sessionSteps',
+                    style: GoogleFonts.inter(color: Colors.white70, fontSize: 10.5, fontWeight: FontWeight.bold)),
               ],
             ),
           ],
@@ -710,319 +427,56 @@ class _BattleScreenState extends State<BattleScreen>
     );
   }
 
-  // Simulated walking meadow with fake walking visual animation
-  Widget _buildSimulatedWalkingMeadow() {
+  Widget _buildWalkMeadow() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
           color: const Color(0xFF161628),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF00E676).withValues(alpha: 0.05),
-              blurRadius: 16,
-              spreadRadius: 2,
-            ),
-          ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Spacer(),
-
-            // Simulated walking visual avatar & animated grass
-            ScaleTransition(
-              scale: Tween<double>(begin: 1.0, end: 1.12).animate(
-                CurvedAnimation(
-                  parent: _walkAnimController,
-                  curve: Curves.easeOutBack,
-                ),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Outer radar ping
-                  Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF00E676).withValues(alpha: 0.05),
-                      border: Border.all(
-                        color: const Color(0xFF00E676).withValues(alpha: 0.2),
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF00E676).withValues(alpha: 0.12),
-                      border: Border.all(
-                        color: const Color(0xFF00E676).withValues(alpha: 0.5),
-                        width: 2,
-                      ),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.directions_walk,
-                        size: 54,
-                        color: Color(0xFF00E676),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 18),
-            Text(
-              'TALL GRASS MEADOW',
-              style: GoogleFonts.pressStart2p(
-                color: Colors.white,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                _pedometerEnabled
-                    ? 'Motion sensor active! Real physical steps will advance your search.'
-                    : 'Walk around in the real world or tap below to simulate steps.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: Colors.white54,
-                  fontSize: 12,
-                  height: 1.4,
-                ),
-              ),
-            ),
-
-            const Spacer(),
-
-            // Simulated Walk Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: NeoPopTiltedButton(
-                isFloating: true,
-                onTapUp: () => _stepForward(isRealStep: false),
-                color: const Color(0xFF00E676),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.directions_walk, color: Colors.black, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'TAKE STEP (+1)',
-                        style: GoogleFonts.pressStart2p(
-                          color: Colors.black,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Active wild encounter field with roaming Pokémon
-  Widget _buildWildEncounterField() {
-    final mon = _wildPokemon!;
-    final tapsLeft = (2 - _tapCount).clamp(0, 2);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFF17172A),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFFFCC00).withValues(alpha: 0.5)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFFCC00).withValues(alpha: 0.1),
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Top encounter banner
+            // Animated walking indicator
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFCC00).withValues(alpha: 0.15),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(19)),
+                shape: BoxShape.circle,
+                color: const Color(0xFF00E676).withValues(alpha: 0.12),
+                border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.5), width: 2),
               ),
-              child: Row(
-                children: [
-                  FadeInLeft(
-                    child: Text(
-                      'WILD ${mon.name.toUpperCase()} APPEARED!',
-                      style: GoogleFonts.pressStart2p(
-                        color: const Color(0xFFFFCC00),
-                        fontSize: 9,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: _fleeEncounter,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white12,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'FLEE',
-                        style: GoogleFonts.inter(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Tap counter instructions banner
+              child: const Icon(Icons.directions_walk, size: 50, color: Color(0xFF00E676)),
+            ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 800.ms),
+            const SizedBox(height: 16),
+            Text('TALL GRASS MEADOW', style: GoogleFonts.pressStart2p(color: Colors.white, fontSize: 11)),
+            const SizedBox(height: 6),
+            Text('Press & HOLD to turbo-walk!', style: GoogleFonts.inter(color: Colors.white54, fontSize: 11)),
+            const Spacer(),
+            // HOLD TO SPAM WALK BUTTON
             Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.touch_app, size: 16, color: Color(0xFFFF5252)),
-                  const SizedBox(width: 6),
-                  Text(
-                    tapsLeft == 2
-                        ? 'TAP 2 TIMES TO CATCH!'
-                        : '1 MORE TAP TO CATCH!',
-                    style: GoogleFonts.pressStart2p(
-                      color: tapsLeft == 1 ? const Color(0xFFFF5252) : Colors.white,
-                      fontSize: 9,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Roaming Arena Field
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Stack(
+              padding: const EdgeInsets.all(16),
+              child: HoldToSpamButton(
+                onTrigger: _stepForward,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00E676),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFF00E676).withValues(alpha: 0.3), blurRadius: 10),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _ArenaGridPainter(),
-                      ),
-                    ),
-
-                    // Roaming Wild Pokémon
-                    AnimatedAlign(
-                      duration: const Duration(milliseconds: 900),
-                      curve: Curves.easeInOutCubic,
-                      alignment: _roamAlignment,
-                      child: GestureDetector(
-                        onTap: _handlePokemonTapped,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: _showHitFlash
-                                ? Colors.redAccent.withValues(alpha: 0.4)
-                                : Colors.transparent,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_showHitFlash)
-                                Text(
-                                  'HIT!',
-                                  style: GoogleFonts.pressStart2p(
-                                    color: Colors.redAccent,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              CachedNetworkImage(
-                                imageUrl: mon.spriteUrl,
-                                width: 130,
-                                height: 130,
-                                fit: BoxFit.contain,
-                                placeholder: (context, url) => Shimmer.fromColors(
-                                  baseColor: Colors.white12,
-                                  highlightColor: Colors.white24,
-                                  child: Container(
-                                    width: 100,
-                                    height: 100,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white12,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                ),
-                              )
-                                  .animate(
-                                    target: _showHitFlash ? 1.0 : 0.0,
-                                  )
-                                  .shake(duration: const Duration(milliseconds: 250)),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.white24),
-                                ),
-                                child: Text(
-                                  mon.formattedId,
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white70,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    Positioned(
-                      bottom: 8,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: Text(
-                          'Pokemon is roaming! Tap it before it moves!',
-                          style: GoogleFonts.inter(
-                            color: Colors.white30,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ),
-                    ),
+                    const Icon(Icons.touch_app, color: Colors.black, size: 18),
+                    const SizedBox(width: 8),
+                    Text('HOLD TO WALK (+1)',
+                        style: GoogleFonts.pressStart2p(color: Colors.black, fontSize: 9.5, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -1032,24 +486,87 @@ class _BattleScreenState extends State<BattleScreen>
       ),
     );
   }
-}
 
-class _ArenaGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.03)
-      ..strokeWidth = 1.0;
+  Widget _buildArena() {
+    final mon = _wildPokemon!;
+    final left = 2 - _tapCount;
 
-    const step = 30.0;
-    for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF17172A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFFFCC00).withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          children: [
+            // Top encounter banner
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0x33FFCC00),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(19)),
+              ),
+              child: Row(
+                children: [
+                  FadeInLeft(
+                    child: Text('WILD ${mon.name.toUpperCase()}!',
+                        style: GoogleFonts.pressStart2p(color: const Color(0xFFFFCC00), fontSize: 9)),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: _flee,
+                    child: Text('FLEE', style: GoogleFonts.inter(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(left == 2 ? 'TAP 2 TIMES TO CATCH!' : '1 MORE TAP TO CATCH!',
+                  style: GoogleFonts.pressStart2p(color: left == 1 ? const Color(0xFFFF5252) : Colors.white, fontSize: 9)),
+            ),
+            // Roaming arena
+            Expanded(
+              child: Stack(
+                children: [
+                  AnimatedAlign(
+                    duration: 900.ms,
+                    curve: Curves.easeInOut,
+                    alignment: _wildPos,
+                    child: GestureDetector(
+                      onTap: _tapPokemon,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _hitFlash ? Colors.redAccent.withValues(alpha: 0.4) : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_hitFlash) Text('HIT!', style: GoogleFonts.pressStart2p(color: Colors.redAccent, fontSize: 10)),
+                            CachedNetworkImage(
+                              imageUrl: mon.spriteUrl,
+                              width: 120,
+                              height: 120,
+                              placeholder: (context, url) => const SizedBox(width: 80, height: 80),
+                            ).animate(target: _hitFlash ? 1.0 : 0.0).shake(duration: 250.ms),
+                            const SizedBox(height: 2),
+                            Text(mon.formattedId,
+                                style: GoogleFonts.inter(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
