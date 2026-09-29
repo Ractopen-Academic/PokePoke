@@ -32,8 +32,11 @@ A retro-styled Pokémon companion mobile application developed with Flutter. It 
 - **Specific Search with Online Fallback**: Supports instantaneous filtering by name or Pokédex number (`25`, `#025`, `pikachu`). If an entry is not present in local storage, a dedicated "Search Online" action queries PokéAPI directly, indexes the response, and caches it locally.
 - **Persistent Favourites System**: Direct heart toggles on cards and within the detail view allow users to bookmark Pokémon. State is synchronized across views via a reactive notifier and persisted through local storage. The bottom navigation bar displays a live item counter badge.
 - **NeoPoP Design Architecture**: Employs elevated surfaces, custom press mechanics, and retro typography.
-- **PokéWalk Mini-Game (Battle Tab)**: Walk a randomized distance (10–50 steps) through the tall grass meadow to trigger wild encounters. Wild Pokémon roam dynamically across the arena field. Tap 2 times to weaken and capture the wild Pokémon into your local Safari Pen.
-- **Safari Pen & Auto-Evolution (Profile Tab)**: Store up to 20 caught Pokémon locally with individual level and XP tracking. Tap a Pokémon to train (+25 XP). Once a Pokémon reaches its level threshold, it automatically evolves using PokéAPI evolution tree data. Unwanted Pokémon can be released back into the wild to free up pen slots.
+- **PokéWalk Mystery Walk Simulation**: An atmospheric walking simulation that conceals the exact step distance needed (secretly 10–50 steps). Features a real-time tall-grass radar scanner that transitions from Calm → Rustling → Signals Detected → Pokémon Nearby.
+- **Real Physical Step Detection (Pedometer)**: Supports physical step tracking using device hardware activity sensors with a permission prompt dialog. Every real-world step advances the exploration towards the wild encounter, alongside the manual tap-to-step button.
+- **Roaming Safari Meadow Sanctuary (Profile Tab)**: Caught Pokémon actively roam, wander, and spread out across an animated 2D meadow habitat. Tapping any roaming Pokémon brings up a quick training popover.
+- **Quick Safari Inventory Modal**: Clicking the "X / 20 SLOTS" badge opens an inventory sheet to review all caught Pokémon, grant +25 XP to level up / auto-evolve, or release unwanted Pokémon.
+- **8-Bit Retro Chiptune Background Music**: Implements looping authentic 8-bit background audio (*"8bit Dungeon Boss"* by Kevin MacLeod) with an interactive sound toggle.
 - **Offline Reliability**: Bundles a verified initial seed dataset and instant evolution mappings to ensure zero-latency initial rendering.
 
 ---
@@ -47,6 +50,8 @@ A retro-styled Pokémon companion mobile application developed with Flutter. It 
 | **NeoPoP** | ![NeoPoP](https://img.shields.io/badge/NeoPoP-FF1C1C?style=flat&logo=flutter&logoColor=white) | 3D neo-brutalist widget library |
 | **PokéAPI** | ![PokéAPI](https://img.shields.io/badge/PokeAPI-EF5350?style=flat&logo=pokemon&logoColor=white) | RESTful API for Pokémon data and sprites |
 | **Google Fonts** | ![Google Fonts](https://img.shields.io/badge/Google_Fonts-4285F4?style=flat&logo=google&logoColor=white) | Typography assets (`PressStart2P`, `Inter`) |
+| **AudioPlayers** | ![AudioPlayers](https://img.shields.io/badge/AudioPlayers-FF9800?style=flat&logo=media&logoColor=white) | Looping 8-bit background music playback |
+| **Pedometer & Sensors** | ![Pedometer](https://img.shields.io/badge/Pedometer-00E676?style=flat&logo=android&logoColor=white) | Real-world physical step tracking |
 | **SharedPreferences** | ![SharedPreferences](https://img.shields.io/badge/Shared_Preferences-4CAF50?style=flat&logo=sqlite&logoColor=white) | Key-value local storage |
 | **HTTP Networking** | ![HTTP](https://img.shields.io/badge/HTTP-009688?style=flat&logo=apache-http-server&logoColor=white) | Network communication and connectivity checks |
 
@@ -81,6 +86,8 @@ A retro-styled Pokémon companion mobile application developed with Flutter. It 
 ```
 pokepoke/
 ├── assets/
+│   ├── audio/
+│   │   └── safari_bgm.mp3               # 8-bit retro chiptune background music (Kevin MacLeod)
 │   └── images/
 │       └── pokeball.svg                 # Vector asset used for status indicators and watermark backgrounds
 ├── lib/
@@ -90,6 +97,7 @@ pokepoke/
 │   │   │   ├── pokemon_seed.dart        # Verified offline starter dataset
 │   │   │   └── pokemon_species_data.dart# Physical dimensions, lore descriptions, and combat abilities
 │   │   ├── services/
+│   │   │   ├── audio_service.dart       # Looping 8-bit background music service and mute controller
 │   │   │   ├── cache_service.dart       # Local persistence and TTL cache manager
 │   │   │   ├── evolution_service.dart   # Offline and network evolution chain resolver
 │   │   │   ├── favourite_service.dart   # Reactive favourite state notifier and storage
@@ -100,7 +108,7 @@ pokepoke/
 │   │           └── loading_screen.dart  # Continuous spinning vector indicator
 │   └── features/
 │       ├── battle/
-│       │   ├── battle_screen.dart       # PokéWalk walking tracker, roaming field & tap-to-catch
+│       │   ├── battle_screen.dart       # PokéWalk mystery walk simulation, pedometer sensor & tap-to-catch
 │       │   └── data/
 │       │       ├── caught_pokemon.dart  # Caught Pokémon data model with XP progression
 │       │       └── battle_pen_service.dart # Safari Pen storage (20 max), release & auto-evolution
@@ -112,7 +120,7 @@ pokepoke/
 │           ├── favourite/
 │           │   └── favourite_screen.dart# Saved Pokémon collection view
 │           └── profile/
-│               └── profile_safari_screen.dart # Safari Pen view, training & evolution interface
+│               └── profile_safari_screen.dart # Roaming Safari Meadow, inventory sheet & training interface
 ├── test/
 │   ├── widget_test.dart                 # Size scaling boundary and calculation tests
 │   ├── favourite_test.dart              # Favourites service and persistence tests
@@ -128,7 +136,7 @@ pokepoke/
 
 ### 1. Splash Screen (`SplashScreen`)
 - Displays an animated vector indicator and rotating competitive gameplay notes during initialization.
-- Loads seed data, verifies local cache integrity, and restores favourite identifiers before routing to the main interface.
+- Loads seed data, verifies local cache integrity, initializes audio and storage services, and restores favourite identifiers before routing to the main interface.
 
 ### 2. Pokédex Feed (`HomeScreen`)
 - Provides real-time query matching across name, Pokédex identifier, and elemental types.
@@ -144,17 +152,19 @@ pokepoke/
 - Synchronized globally using a reactive notifier.
 
 ### 5. PokéWalk Arena (`BattleScreen`)
-- Walking simulator requiring randomized 10–50 steps to trigger tall-grass wild Pokémon encounters.
-- Wild Pokémon roams and spreads dynamically across an animated arena grid.
+- Mystery walking simulator where the required step target is hidden (random 10–50 steps).
+- Real-time tall-grass radar scanner displays distance signals (Quiet → Rustling → Signals Detected → Pokémon Nearby).
+- Integrates real physical step tracking via device motion sensors (`Pedometer`) with user permission request dialog.
+- Wild Pokémon roams and spreads dynamically across the arena grid.
 - Tap 2 times to weaken and capture the roaming Pokémon into the local Safari Pen.
-- Directly links to the Safari Pen and prevents captures when the 20-slot capacity is reached.
+- Features an 8-bit background music toggle button.
 
-### 6. Safari Pen & Training (`ProfileSafariScreen`)
-- Displays up to 20 captured Pokémon stored locally in the trainer's Safari Pen.
-- "TRAIN +25" button grants XP, advancing Pokémon towards their next level threshold.
-- Automatically discovers PokéAPI evolution chains and triggers auto-evolution celebrations once level requirements are met.
-- Provides a release/discard mechanism to free up Safari Pen slots.
-- Includes an empty-state action returning the user to the primary Pokédex feed.
+### 6. Safari Pen & Roaming Sanctuary (`ProfileSafariScreen`)
+- **Interactive Roaming Meadow**: All caught Pokémon wander and roam freely across an animated green meadow habitat.
+- Tapping any roaming Pokémon in the meadow reveals a quick training popover.
+- **Quick Inventory Sheet**: Clicking the **"X / 20 SLOTS"** badge opens a modal bottom sheet listing all caught Pokémon.
+- Trainers can train (+25 XP) to level up and trigger auto-evolution celebrations once level requirements are met, or release Pokémon back into the wild to free up pen slots.
+- Includes view switching between Roaming Park view and Grid Inventory view, with background music control.
 
 ---
 

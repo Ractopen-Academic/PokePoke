@@ -10,6 +10,7 @@ import 'package:pokepoke/core/services/cache_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:pokepoke/core/services/favourite_service.dart';
 import 'package:pokepoke/core/services/pokemon_service.dart';
+import 'package:pokepoke/core/services/audio_service.dart';
 import 'package:pokepoke/core/widgets/loading_screen/loading_screen.dart';
 import 'package:pokepoke/features/battle/data/battle_pen_service.dart';
 import 'package:pokepoke/features/dashboard/home/home_screen.dart';
@@ -141,6 +142,7 @@ class _SplashScreenState extends State<SplashScreen>
       await CacheService.init().timeout(const Duration(seconds: 3));
       await FavouriteService.init().timeout(const Duration(seconds: 2));
       await BattlePenService.init().timeout(const Duration(seconds: 2));
+      await SafariAudioService.init().timeout(const Duration(seconds: 2));
     } catch (_) {}
 
     _setStatus('Preparing Pokédex…', 0.55);
